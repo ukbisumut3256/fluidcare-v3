@@ -415,17 +415,23 @@ export default function Home() {
 
       const doc = new jsPDF("p", "mm", "a4");
 
-      const primary = [15, 23, 42] as const;
-      const blue = [37, 99, 235] as const;
-      const blueOverlay = [29, 78, 216] as const;
-      const cyanOverlay = [14, 165, 233] as const;
-      const lightBlue = [239, 246, 255] as const;
-      const lightGray = [248, 250, 252] as const;
-      const slate = [71, 85, 105] as const;
-      const border = [226, 232, 240] as const;
-      const success = [22, 163, 74] as const;
-      const danger = [220, 38, 38] as const;
-      const warning = [217, 119, 6] as const;
+      type RGB = readonly [number, number, number];
+
+      const primary: RGB = [15, 23, 42];
+      const blue: RGB = [37, 99, 235];
+      const blueOverlay: RGB = [29, 78, 216];
+      const cyanOverlay: RGB = [14, 165, 233];
+      const lightBlue: RGB = [239, 246, 255];
+      const lightGray: RGB = [248, 250, 252];
+      const slate: RGB = [71, 85, 105];
+      const border: RGB = [226, 232, 240];
+      const success: RGB = [22, 163, 74];
+      const danger: RGB = [220, 38, 38];
+      const warning: RGB = [217, 119, 6];
+
+      const setFill = (color: RGB) => doc.setFillColor(color[0], color[1], color[2]);
+      const setDraw = (color: RGB) => doc.setDrawColor(color[0], color[1], color[2]);
+      const setText = (color: RGB) => doc.setTextColor(color[0], color[1], color[2]);
 
       const now = new Date();
       const exportDateDisplay = formatDateDisplay(now);
@@ -455,7 +461,7 @@ export default function Home() {
           ? 350 * result.bsa
           : 0;
 
-      const statusColor =
+      const statusColor: RGB =
         result.statusCorrected === "Positif"
           ? success
           : result.statusCorrected === "Negatif"
@@ -494,7 +500,7 @@ export default function Home() {
       if (bgDataUrl) {
         doc.addImage(bgDataUrl, "JPEG", headerX, headerY, headerW, headerH);
       } else {
-        doc.setFillColor(...blue);
+        setFill(blue);
         doc.rect(headerX, headerY, headerW, headerH, "F");
       }
 
@@ -508,20 +514,20 @@ export default function Home() {
 
       doc.restoreGraphicsState();
       doc.setGState(new (doc as any).GState({ opacity: 1 }));
-      doc.setDrawColor(...blue);
+      setDraw(blue);
       doc.roundedRect(headerX, headerY, headerW, headerH, 6, 6, "S");
 
       doc.setFillColor(255, 255, 255);
       doc.setGState(new (doc as any).GState({ opacity: 0.96 }));
       doc.roundedRect(14, 14, 18, 18, 4, 4, "F");
       doc.setGState(new (doc as any).GState({ opacity: 1 }));
-      doc.setDrawColor(...border);
+      setDraw(border);
       doc.roundedRect(14, 14, 18, 18, 4, 4, "S");
 
       if (logoDataUrl) {
         doc.addImage(logoDataUrl, "PNG", 16, 16, 14, 14);
       } else {
-        doc.setTextColor(...blue);
+        setText(blue);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.text("LOGO RS", 23, 24, { align: "center" });
@@ -541,7 +547,7 @@ export default function Home() {
       doc.roundedRect(150, 15, 44, 14, 4, 4, "F");
       doc.setGState(new (doc as any).GState({ opacity: 1 }));
 
-      doc.setTextColor(...blue);
+      setText(blue);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.text("Tanggal Export", 172, 20, { align: "center" });
@@ -550,12 +556,12 @@ export default function Home() {
       doc.setFontSize(7);
       doc.text(exportDateDisplay, 172, 25, { align: "center" });
 
-      doc.setFillColor(...lightBlue);
+      setFill(lightBlue);
       doc.roundedRect(10, 46, 190, 38, 5, 5, "F");
-      doc.setDrawColor(...border);
+      setDraw(border);
       doc.roundedRect(10, 46, 190, 38, 5, 5, "S");
 
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.text("IDENTITAS PASIEN", 14, 54);
@@ -581,7 +587,7 @@ export default function Home() {
       doc.text("Suhu Tubuh", 108, 77);
       doc.text(`: ${patient.temperature || "-"} °C`, 137, 77);
 
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.text("RINGKASAN HASIL", 10, 94);
@@ -596,23 +602,23 @@ export default function Home() {
       ];
 
       summaryCards.forEach((card) => {
-        doc.setFillColor(...lightGray);
+        setFill(lightGray);
         doc.roundedRect(card.x, card.y, card.w, card.h, 4, 4, "F");
-        doc.setDrawColor(...border);
+        setDraw(border);
         doc.roundedRect(card.x, card.y, card.w, card.h, 4, 4, "S");
 
-        doc.setTextColor(...slate);
+        setText(slate);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.text(card.label, card.x + card.w / 2, card.y + 7, { align: "center" });
 
-        doc.setTextColor(...primary);
+        setText(primary);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(13);
         doc.text(card.value, card.x + card.w / 2, card.y + 16.5, { align: "center" });
       });
 
-      doc.setFillColor(...statusColor);
+      setFill(statusColor);
       doc.roundedRect(10, 156, 190, 20, 5, 5, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
@@ -627,7 +633,7 @@ export default function Home() {
         align: "center",
       });
 
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.text("RINCIAN KOMPONEN CAIRAN", 10, 186);
@@ -679,7 +685,7 @@ export default function Home() {
         nextY = 18;
       }
 
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.text("RUMUS DAN VALIDASI HASIL", 10, nextY);
@@ -714,14 +720,14 @@ export default function Home() {
       const wrappedFormulaLines = formulaText.flatMap((line) => doc.splitTextToSize(line, 176));
       const formulaBoxHeight = Math.max(34, wrappedFormulaLines.length * 5.2 + 10);
 
-      doc.setFillColor(...lightGray);
+      setFill(lightGray);
       doc.roundedRect(10, nextY + 4, 190, formulaBoxHeight, 4, 4, "F");
-      doc.setDrawColor(...border);
+      setDraw(border);
       doc.roundedRect(10, nextY + 4, 190, formulaBoxHeight, 4, 4, "S");
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.text(wrappedFormulaLines, 14, nextY + 12);
 
       let sectionY = nextY + 4 + formulaBoxHeight + 10;
@@ -732,7 +738,7 @@ export default function Home() {
           sectionY = 20;
         }
 
-        doc.setTextColor(...primary);
+        setText(primary);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
         doc.text("CATATAN TAMBAHAN", 10, sectionY);
@@ -740,14 +746,14 @@ export default function Home() {
         const wrappedNotes = doc.splitTextToSize(additionalNotes, 176);
         const notesBoxHeight = Math.max(24, wrappedNotes.length * 5.2 + 10);
 
-        doc.setFillColor(...lightBlue);
+        setFill(lightBlue);
         doc.roundedRect(10, sectionY + 4, 190, notesBoxHeight, 4, 4, "F");
-        doc.setDrawColor(...border);
+        setDraw(border);
         doc.roundedRect(10, sectionY + 4, 190, notesBoxHeight, 4, 4, "S");
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        doc.setTextColor(...primary);
+        setText(primary);
         doc.text(wrappedNotes, 14, sectionY + 12);
 
         sectionY = sectionY + 4 + notesBoxHeight + 12;
@@ -758,14 +764,14 @@ export default function Home() {
         sectionY = 20;
       }
 
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.text("PENGESAHAN", 10, sectionY);
 
-      doc.setFillColor(...lightBlue);
+      setFill(lightBlue);
       doc.roundedRect(10, sectionY + 4, 190, 40, 5, 5, "F");
-      doc.setDrawColor(...border);
+      setDraw(border);
       doc.roundedRect(10, sectionY + 4, 190, 40, 5, 5, "S");
 
       const signCenterX = 150;
@@ -775,7 +781,7 @@ export default function Home() {
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.setTextColor(...primary);
+      setText(primary);
       doc.text("Petugas Penanggung Jawab", signCenterX, titleY, {
         align: "center",
       });
@@ -786,19 +792,19 @@ export default function Home() {
         align: "center",
       });
 
-      doc.setDrawColor(...primary);
+      setDraw(primary);
       doc.setLineWidth(0.4);
       doc.line(120, lineY, 180, lineY);
 
-      const pageCount = doc.internal.getNumberOfPages();
+      const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setDrawColor(...border);
+        setDraw(border);
         doc.line(10, pageHeight - 10, 200, pageHeight - 10);
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.setTextColor(...slate);
+        setText(slate);
         doc.text(`Pasien: ${patient.name}`, 10, pageHeight - 5);
         doc.text(`Halaman ${i} / ${pageCount}`, pageWidth - 10, pageHeight - 5, {
           align: "right",
