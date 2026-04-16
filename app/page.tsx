@@ -77,18 +77,18 @@ const initialPatientForm: PatientForm = {
 };
 
 const initialFluidForm: FluidForm = {
-  oral: "0",
-  infus: "0",
-  obat: "0",
-  transfusi: "0",
+  oral: "",
+  infus: "",
+  obat: "",
+  transfusi: "",
   lainIntakeType: "",
-  lainIntakeValue: "0",
-  urin: "0",
-  muntah: "0",
-  drainase: "0",
-  feses: "0",
+  lainIntakeValue: "",
+  urin: "",
+  muntah: "",
+  drainase: "",
+  feses: "",
   lainOutputType: "",
-  lainOutputValue: "0",
+  lainOutputValue: "",
   additionalNotes: "",
 };
 
@@ -279,7 +279,23 @@ export default function Home() {
         const parsed = JSON.parse(raw);
         if (parsed.officer) setOfficer(parsed.officer);
         if (parsed.patient) setPatient(parsed.patient);
-        if (parsed.fluid) setFluid(parsed.fluid);
+        if (parsed.fluid) {
+        setFluid({
+          ...parsed.fluid,
+          oral: parsed.fluid.oral === "0" ? "" : parsed.fluid.oral ?? "",
+          infus: parsed.fluid.infus === "0" ? "" : parsed.fluid.infus ?? "",
+          obat: parsed.fluid.obat === "0" ? "" : parsed.fluid.obat ?? "",
+          transfusi: parsed.fluid.transfusi === "0" ? "" : parsed.fluid.transfusi ?? "",
+          lainIntakeValue:
+            parsed.fluid.lainIntakeValue === "0" ? "" : parsed.fluid.lainIntakeValue ?? "",
+          urin: parsed.fluid.urin === "0" ? "" : parsed.fluid.urin ?? "",
+          muntah: parsed.fluid.muntah === "0" ? "" : parsed.fluid.muntah ?? "",
+          drainase: parsed.fluid.drainase === "0" ? "" : parsed.fluid.drainase ?? "",
+          feses: parsed.fluid.feses === "0" ? "" : parsed.fluid.feses ?? "",
+          lainOutputValue:
+            parsed.fluid.lainOutputValue === "0" ? "" : parsed.fluid.lainOutputValue ?? "",
+        });
+      }
         if (parsed.result) setResult(parsed.result);
         setSaveMessage("Data terakhir berhasil dimuat dari penyimpanan lokal.");
       } catch {
@@ -1231,13 +1247,12 @@ function FieldNumber({
         <span className="text-xs font-medium text-slate-500">mL</span>
       </label>
       <input
-        type="number"
-        min={0}
-        max={10000}
-        step={0.1}
+        type="text"
+        inputMode="decimal"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+        placeholder="Contoh: 500"
+        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
       />
     </div>
   );
