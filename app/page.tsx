@@ -1240,6 +1240,19 @@ function FieldNumber({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const handleChange = (raw: string) => {
+    const normalized = raw.replace(/,/g, ".");
+
+    if (normalized === "") {
+      onChange("");
+      return;
+    }
+
+    if (/^\d*\.?\d*$/.test(normalized)) {
+      onChange(normalized);
+    }
+  };
+
   return (
     <div>
       <label className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-700 min-h-[20px]">
@@ -1250,7 +1263,7 @@ function FieldNumber({
         type="text"
         inputMode="decimal"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleChange(e.target.value)}
         placeholder="Contoh: 500"
         className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
       />
