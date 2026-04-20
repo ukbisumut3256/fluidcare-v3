@@ -367,7 +367,7 @@ export default function Home() {
     let methodLabel = "";
 
     if (patient.ageCategory === "dewasa (>18 Thn)") {
-      baseIwl = 15 * weightNum;
+      baseIwl = 0.5 * weightNum * 24;
       methodLabel = "Metode dewasa";
     } else {
       bsa = Math.sqrt((heightNum * weightNum) / 3600);
@@ -472,17 +472,17 @@ export default function Home() {
 
       const baseIwl =
         patient.ageCategory === "dewasa (>18 Thn)"
-          ? 15 * weightNum
+          ? 0.5 * weightNum * 24
           : result.bsa
-          ? 350 * result.bsa
-          : 0;
+            ? 350 * result.bsa
+            : 0;
 
       const statusColor: RGB =
         result.statusCorrected === "Positif"
           ? success
           : result.statusCorrected === "Negatif"
-          ? danger
-          : warning;
+            ? danger
+            : warning;
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -713,7 +713,7 @@ export default function Home() {
 
       if (patient.ageCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
-          `IWL normal dewasa = 15 x BB = 15 x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
+          `IWL normal dewasa = 15 x BB / 24 = 15 x ${weightNum.toFixed(1)} / 24 = ${baseIwl.toFixed(1)} mL/hari`
         );
       } else {
         formulaLines.push(
@@ -1020,9 +1020,8 @@ export default function Home() {
             )}
 
             <div
-              className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 ${
-                !formReady ? "opacity-60 pointer-events-none" : ""
-              }`}
+              className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 ${!formReady ? "opacity-60 pointer-events-none" : ""
+                }`}
             >
               <FluidGroup title="Intake">
                 <FieldNumber label="Oral" value={fluid.oral} onChange={(v) => setFluidField("oral", v)} />
@@ -1189,11 +1188,10 @@ export default function Home() {
 }
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:ring-4 ${
-    hasError
-      ? "border-rose-400 focus:border-rose-400 focus:ring-rose-100"
-      : "border-slate-300 focus:border-blue-400 focus:ring-blue-100"
-  }`;
+  return `w-full rounded-2xl border bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:ring-4 ${hasError
+    ? "border-rose-400 focus:border-rose-400 focus:ring-rose-100"
+    : "border-slate-300 focus:border-blue-400 focus:ring-blue-100"
+    }`;
 }
 
 function FormField({
@@ -1340,10 +1338,10 @@ function FormulaPanel({
 
   const baseIwl =
     patient.ageCategory === "dewasa (>18 Thn)"
-      ? 15 * weightNum
+      ? 0.5 * weightNum * 24
       : result.bsa
-      ? 350 * result.bsa
-      : 0;
+        ? 350 * result.bsa
+        : 0;
 
   return (
     <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-700 leading-8">
@@ -1370,7 +1368,7 @@ function FormulaPanel({
 
           {patient.ageCategory === "dewasa (>18 Thn)" ? (
             <p>
-              IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
+              IWL normal dewasa = 15 × BB / 24 = 15 × {weightNum.toFixed(1)} / 24 ={" "}
               <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
             </p>
           ) : (
