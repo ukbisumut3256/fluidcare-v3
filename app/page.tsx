@@ -280,22 +280,22 @@ export default function Home() {
         if (parsed.officer) setOfficer(parsed.officer);
         if (parsed.patient) setPatient(parsed.patient);
         if (parsed.fluid) {
-        setFluid({
-          ...parsed.fluid,
-          oral: parsed.fluid.oral === "0" ? "" : parsed.fluid.oral ?? "",
-          infus: parsed.fluid.infus === "0" ? "" : parsed.fluid.infus ?? "",
-          obat: parsed.fluid.obat === "0" ? "" : parsed.fluid.obat ?? "",
-          transfusi: parsed.fluid.transfusi === "0" ? "" : parsed.fluid.transfusi ?? "",
-          lainIntakeValue:
-            parsed.fluid.lainIntakeValue === "0" ? "" : parsed.fluid.lainIntakeValue ?? "",
-          urin: parsed.fluid.urin === "0" ? "" : parsed.fluid.urin ?? "",
-          muntah: parsed.fluid.muntah === "0" ? "" : parsed.fluid.muntah ?? "",
-          drainase: parsed.fluid.drainase === "0" ? "" : parsed.fluid.drainase ?? "",
-          feses: parsed.fluid.feses === "0" ? "" : parsed.fluid.feses ?? "",
-          lainOutputValue:
-            parsed.fluid.lainOutputValue === "0" ? "" : parsed.fluid.lainOutputValue ?? "",
-        });
-      }
+          setFluid({
+            ...parsed.fluid,
+            oral: parsed.fluid.oral === "0" ? "" : parsed.fluid.oral ?? "",
+            infus: parsed.fluid.infus === "0" ? "" : parsed.fluid.infus ?? "",
+            obat: parsed.fluid.obat === "0" ? "" : parsed.fluid.obat ?? "",
+            transfusi: parsed.fluid.transfusi === "0" ? "" : parsed.fluid.transfusi ?? "",
+            lainIntakeValue:
+              parsed.fluid.lainIntakeValue === "0" ? "" : parsed.fluid.lainIntakeValue ?? "",
+            urin: parsed.fluid.urin === "0" ? "" : parsed.fluid.urin ?? "",
+            muntah: parsed.fluid.muntah === "0" ? "" : parsed.fluid.muntah ?? "",
+            drainase: parsed.fluid.drainase === "0" ? "" : parsed.fluid.drainase ?? "",
+            feses: parsed.fluid.feses === "0" ? "" : parsed.fluid.feses ?? "",
+            lainOutputValue:
+              parsed.fluid.lainOutputValue === "0" ? "" : parsed.fluid.lainOutputValue ?? "",
+          });
+        }
         if (parsed.result) setResult(parsed.result);
         setSaveMessage("Data terakhir berhasil dimuat dari penyimpanan lokal.");
       } catch {
@@ -367,7 +367,7 @@ export default function Home() {
     let methodLabel = "";
 
     if (patient.ageCategory === "dewasa (>18 Thn)") {
-      baseIwl = 0.5 * weightNum * 24;
+      baseIwl = 15 * weightNum;
       methodLabel = "Metode dewasa";
     } else {
       bsa = Math.sqrt((heightNum * weightNum) / 3600);
@@ -472,7 +472,7 @@ export default function Home() {
 
       const baseIwl =
         patient.ageCategory === "dewasa (>18 Thn)"
-          ? 0.5 * weightNum * 24
+          ? 15 * weightNum
           : result.bsa
           ? 350 * result.bsa
           : 0;
@@ -713,7 +713,7 @@ export default function Home() {
 
       if (patient.ageCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
-          `IWL normal dewasa = 15 x BB x 24 = 15 x ${weightNum.toFixed(1)} x 24 = ${baseIwl.toFixed(1)} mL/hari`
+          `IWL normal dewasa = 15 x BB = 15 x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
         );
       } else {
         formulaLines.push(
@@ -1340,7 +1340,7 @@ function FormulaPanel({
 
   const baseIwl =
     patient.ageCategory === "dewasa (>18 Thn)"
-      ? 0.5 * weightNum * 24
+      ? 15 * weightNum
       : result.bsa
       ? 350 * result.bsa
       : 0;
@@ -1370,7 +1370,7 @@ function FormulaPanel({
 
           {patient.ageCategory === "dewasa (>18 Thn)" ? (
             <p>
-              IWL normal dewasa = 15 × BB × 24 = 15 × {weightNum.toFixed(1)} × 24 ={" "}
+              IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
               <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
             </p>
           ) : (
