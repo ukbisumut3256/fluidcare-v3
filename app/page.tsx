@@ -713,7 +713,7 @@ export default function Home() {
 
       if (patient.ageCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
-          `IWL normal dewasa = 0,5 x BB x 24 = 0,5 x ${weightNum.toFixed(1)} x 24 = ${baseIwl.toFixed(1)} mL/hari`
+          `IWL normal dewasa = 15 x BB x 24 = 15 x ${weightNum.toFixed(1)} x 24 = ${baseIwl.toFixed(1)} mL/hari`
         );
       } else {
         formulaLines.push(
@@ -1370,7 +1370,7 @@ function FormulaPanel({
 
           {patient.ageCategory === "dewasa (>18 Thn)" ? (
             <p>
-              IWL normal dewasa = 0,5 × BB × 24 = 0,5 × {weightNum.toFixed(1)} × 24 ={" "}
+              IWL normal dewasa = 15 × BB × 24 = 15 × {weightNum.toFixed(1)} × 24 ={" "}
               <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
             </p>
           ) : (
