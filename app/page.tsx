@@ -19,19 +19,23 @@ type PatientForm = {
   temperature: string;
 };
 
+type AdditionalFluidItem = {
+  id: string;
+  type: string;
+  value: string;
+};
+
 type FluidForm = {
   oral: string;
   infus: string;
   obat: string;
   transfusi: string;
-  lainIntakeType: string;
-  lainIntakeValue: string;
+  additionalIntakes: AdditionalFluidItem[];
   urin: string;
   muntah: string;
   drainase: string;
   feses: string;
-  lainOutputType: string;
-  lainOutputValue: string;
+  additionalOutputs: AdditionalFluidItem[];
   additionalNotes: string;
 };
 
@@ -61,7 +65,8 @@ type CalculationResult = {
   feverFactor: number;
 };
 
-const STORAGE_KEY = "kalbaca-web-v6-data";
+const STORAGE_KEY = "kalbaca-web-v7-data";
+const MAX_ADDITIONAL_ITEMS = 5;
 
 const initialOfficerForm: OfficerForm = {
   officerName: "",
@@ -76,25 +81,35 @@ const initialPatientForm: PatientForm = {
   temperature: "",
 };
 
+function createAdditionalItem(): AdditionalFluidItem {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    type: "",
+    value: "",
+  };
+}
+
 const initialFluidForm: FluidForm = {
   oral: "",
   infus: "",
   obat: "",
   transfusi: "",
-  lainIntakeType: "",
-  lainIntakeValue: "",
+  additionalIntakes: [createAdditionalItem()],
   urin: "",
   muntah: "",
   drainase: "",
   feses: "",
-  lainOutputType: "",
-  lainOutputValue: "",
+  additionalOutputs: [createAdditionalItem()],
   additionalNotes: "",
 };
 
 function toNumber(value: string) {
   const parsed = parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sumAdditionalItems(items: AdditionalFluidItem[]) {
+  return items.reduce((total, item) => total + toNumber(item.value), 0);
 }
 
 function formatMl(value: number) {
@@ -252,6 +267,21 @@ async function loadImageAsDataUrl(src: string) {
   });
 }
 
+function normalizeAdditionalItems(items: unknown): AdditionalFluidItem[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [createAdditionalItem()];
+  }
+
+  return items.slice(0, MAX_ADDITIONAL_ITEMS).map((item, index) => {
+    const safeItem = item as Partial<AdditionalFluidItem>;
+    return {
+      id: safeItem.id || `restored-${index}-${Math.random().toString(36).slice(2, 9)}`,
+      type: safeItem.type ?? "",
+      value: safeItem.value === "0" ? "" : safeItem.value ?? "",
+    };
+  });
+}
+
 export default function Home() {
   const [officer, setOfficer] = useState<OfficerForm>(initialOfficerForm);
   const [patient, setPatient] = useState<PatientForm>(initialPatientForm);
@@ -279,23 +309,51 @@ export default function Home() {
         const parsed = JSON.parse(raw);
         if (parsed.officer) setOfficer(parsed.officer);
         if (parsed.patient) setPatient(parsed.patient);
+
         if (parsed.fluid) {
           setFluid({
-            ...parsed.fluid,
             oral: parsed.fluid.oral === "0" ? "" : parsed.fluid.oral ?? "",
             infus: parsed.fluid.infus === "0" ? "" : parsed.fluid.infus ?? "",
             obat: parsed.fluid.obat === "0" ? "" : parsed.fluid.obat ?? "",
             transfusi: parsed.fluid.transfusi === "0" ? "" : parsed.fluid.transfusi ?? "",
-            lainIntakeValue:
-              parsed.fluid.lainIntakeValue === "0" ? "" : parsed.fluid.lainIntakeValue ?? "",
+            additionalIntakes: normalizeAdditionalItems(
+              parsed.fluid.additionalIntakes ??
+                (parsed.fluid.lainIntakeType || parsed.fluid.lainIntakeValue
+                  ? [
+                      {
+                        id: "legacy-intake-1",
+                        type: parsed.fluid.lainIntakeType ?? "",
+                        value:
+                          parsed.fluid.lainIntakeValue === "0"
+                            ? ""
+                            : parsed.fluid.lainIntakeValue ?? "",
+                      },
+                    ]
+                  : null)
+            ),
             urin: parsed.fluid.urin === "0" ? "" : parsed.fluid.urin ?? "",
             muntah: parsed.fluid.muntah === "0" ? "" : parsed.fluid.muntah ?? "",
             drainase: parsed.fluid.drainase === "0" ? "" : parsed.fluid.drainase ?? "",
             feses: parsed.fluid.feses === "0" ? "" : parsed.fluid.feses ?? "",
-            lainOutputValue:
-              parsed.fluid.lainOutputValue === "0" ? "" : parsed.fluid.lainOutputValue ?? "",
+            additionalOutputs: normalizeAdditionalItems(
+              parsed.fluid.additionalOutputs ??
+                (parsed.fluid.lainOutputType || parsed.fluid.lainOutputValue
+                  ? [
+                      {
+                        id: "legacy-output-1",
+                        type: parsed.fluid.lainOutputType ?? "",
+                        value:
+                          parsed.fluid.lainOutputValue === "0"
+                            ? ""
+                            : parsed.fluid.lainOutputValue ?? "",
+                      },
+                    ]
+                  : null)
+            ),
+            additionalNotes: parsed.fluid.additionalNotes ?? "",
           });
         }
+
         if (parsed.result) setResult(parsed.result);
         setSaveMessage("Data terakhir berhasil dimuat dari penyimpanan lokal.");
       } catch {
@@ -336,6 +394,49 @@ export default function Home() {
     setResult(null);
   }
 
+  function updateAdditionalItem(
+    group: "additionalIntakes" | "additionalOutputs",
+    id: string,
+    field: keyof Omit<AdditionalFluidItem, "id">,
+    value: string
+  ) {
+    if (!formReady) return;
+
+    setFluid((prev) => ({
+      ...prev,
+      [group]: prev[group].map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    }));
+    setResult(null);
+  }
+
+  function addAdditionalItem(group: "additionalIntakes" | "additionalOutputs") {
+    if (!formReady) return;
+
+    setFluid((prev) => {
+      if (prev[group].length >= MAX_ADDITIONAL_ITEMS) return prev;
+      return {
+        ...prev,
+        [group]: [...prev[group], createAdditionalItem()],
+      };
+    });
+    setResult(null);
+  }
+
+  function removeAdditionalItem(group: "additionalIntakes" | "additionalOutputs", id: string) {
+    if (!formReady) return;
+
+    setFluid((prev) => {
+      const filtered = prev[group].filter((item) => item.id !== id);
+      return {
+        ...prev,
+        [group]: filtered.length > 0 ? filtered : [createAdditionalItem()],
+      };
+    });
+    setResult(null);
+  }
+
   function calculate() {
     const officerValidation = validateOfficer(officer);
     const patientValidation = validatePatient(patient);
@@ -350,14 +451,14 @@ export default function Home() {
       toNumber(fluid.infus) +
       toNumber(fluid.obat) +
       toNumber(fluid.transfusi) +
-      toNumber(fluid.lainIntakeValue);
+      sumAdditionalItems(fluid.additionalIntakes);
 
     const totalOutput =
       toNumber(fluid.urin) +
       toNumber(fluid.muntah) +
       toNumber(fluid.drainase) +
       toNumber(fluid.feses) +
-      toNumber(fluid.lainOutputValue);
+      sumAdditionalItems(fluid.additionalOutputs);
 
     const balanceStandard = totalIntake - totalOutput;
 
@@ -367,7 +468,7 @@ export default function Home() {
     let methodLabel = "";
 
     if (patient.ageCategory === "dewasa (>18 Thn)") {
-      baseIwl = 0.5 * weightNum * 24;
+      baseIwl = 15 * weightNum;
       methodLabel = "Metode dewasa";
     } else {
       bsa = Math.sqrt((heightNum * weightNum) / 3600);
@@ -400,7 +501,11 @@ export default function Home() {
   function resetAll() {
     setOfficer(initialOfficerForm);
     setPatient(initialPatientForm);
-    setFluid(initialFluidForm);
+    setFluid({
+      ...initialFluidForm,
+      additionalIntakes: [createAdditionalItem()],
+      additionalOutputs: [createAdditionalItem()],
+    });
     setResult(null);
     localStorage.removeItem(STORAGE_KEY);
     setSaveMessage("Semua data telah direset dan penyimpanan lokal dibersihkan.");
@@ -461,18 +566,18 @@ export default function Home() {
         toNumber(fluid.infus) +
         toNumber(fluid.obat) +
         toNumber(fluid.transfusi) +
-        toNumber(fluid.lainIntakeValue);
+        sumAdditionalItems(fluid.additionalIntakes);
 
       const totalOutput =
         toNumber(fluid.urin) +
         toNumber(fluid.muntah) +
         toNumber(fluid.drainase) +
         toNumber(fluid.feses) +
-        toNumber(fluid.lainOutputValue);
+        sumAdditionalItems(fluid.additionalOutputs);
 
       const baseIwl =
         patient.ageCategory === "dewasa (>18 Thn)"
-          ? 0.5 * weightNum * 24
+          ? 15 * weightNum
           : result.bsa
             ? 350 * result.bsa
             : 0;
@@ -654,6 +759,22 @@ export default function Home() {
       doc.setFontSize(11);
       doc.text("RINCIAN KOMPONEN CAIRAN", 10, 186);
 
+      const intakeRows = fluid.additionalIntakes
+        .filter((item) => item.type.trim() || item.value.trim())
+        .map((item, index) => [
+          "Intake",
+          item.type.trim() || `Lainnya ${index + 1}`,
+          `${toNumber(item.value).toFixed(1)} mL`,
+        ]);
+
+      const outputRows = fluid.additionalOutputs
+        .filter((item) => item.type.trim() || item.value.trim())
+        .map((item, index) => [
+          "Output",
+          item.type.trim() || `Lainnya ${index + 1}`,
+          `${toNumber(item.value).toFixed(1)} mL`,
+        ]);
+
       autoTable(doc, {
         startY: 190,
         head: [["Kelompok", "Komponen", "Nilai"]],
@@ -662,12 +783,12 @@ export default function Home() {
           ["Intake", "Infus", `${toNumber(fluid.infus).toFixed(1)} mL`],
           ["Intake", "Obat Cair", `${toNumber(fluid.obat).toFixed(1)} mL`],
           ["Intake", "Transfusi", `${toNumber(fluid.transfusi).toFixed(1)} mL`],
-          ["Intake", fluid.lainIntakeType || "Lainnya", `${toNumber(fluid.lainIntakeValue).toFixed(1)} mL`],
+          ...intakeRows,
           ["Output", "Urin", `${toNumber(fluid.urin).toFixed(1)} mL`],
           ["Output", "Muntah", `${toNumber(fluid.muntah).toFixed(1)} mL`],
           ["Output", "Drainase", `${toNumber(fluid.drainase).toFixed(1)} mL`],
           ["Output", "Feses Cair", `${toNumber(fluid.feses).toFixed(1)} mL`],
-          ["Output", fluid.lainOutputType || "Lainnya", `${toNumber(fluid.lainOutputValue).toFixed(1)} mL`],
+          ...outputRows,
         ],
         theme: "grid",
         headStyles: {
@@ -713,7 +834,7 @@ export default function Home() {
 
       if (patient.ageCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
-          `IWL normal dewasa = 15 x BB / 24 = 15 x ${weightNum.toFixed(1)} / 24 = ${baseIwl.toFixed(1)} mL/hari`
+          `IWL normal dewasa = 15 x BB = 15 x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
         );
       } else {
         formulaLines.push(
@@ -1020,44 +1141,52 @@ export default function Home() {
             )}
 
             <div
-              className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 ${!formReady ? "opacity-60 pointer-events-none" : ""
-                }`}
+              className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 ${
+                !formReady ? "opacity-60 pointer-events-none" : ""
+              }`}
             >
               <FluidGroup title="Intake">
                 <FieldNumber label="Oral" value={fluid.oral} onChange={(v) => setFluidField("oral", v)} />
                 <FieldNumber label="Infus" value={fluid.infus} onChange={(v) => setFluidField("infus", v)} />
                 <FieldNumber label="Obat Cair" value={fluid.obat} onChange={(v) => setFluidField("obat", v)} />
+                <FieldNumber label="Transfusi" value={fluid.transfusi} onChange={(v) => setFluidField("transfusi", v)} />
               </FluidGroup>
 
-              <FluidGroup title="Intake Lanjutan">
-                <FieldNumber label="Transfusi" value={fluid.transfusi} onChange={(v) => setFluidField("transfusi", v)} />
-                <FieldText
-                  label="Jenis Intake Lainnya"
-                  value={fluid.lainIntakeType}
-                  onChange={(v) => setFluidField("lainIntakeType", v)}
-                  placeholder="Contoh: Nutrisi Enteral"
+              <FluidGroup title="Intake Lainnya">
+                <AdditionalFluidSection
+                  items={fluid.additionalIntakes}
+                  onAdd={() => addAdditionalItem("additionalIntakes")}
+                  onRemove={(id) => removeAdditionalItem("additionalIntakes", id)}
+                  onTypeChange={(id, value) =>
+                    updateAdditionalItem("additionalIntakes", id, "type", value)
+                  }
+                  onValueChange={(id, value) =>
+                    updateAdditionalItem("additionalIntakes", id, "value", value)
+                  }
+                  addLabel="+ Tambah Intake Lainnya"
                 />
-                <FieldNumber label="Nilai Intake Lainnya" value={fluid.lainIntakeValue} onChange={(v) => setFluidField("lainIntakeValue", v)} />
               </FluidGroup>
 
               <FluidGroup title="Output">
                 <FieldNumber label="Urin" value={fluid.urin} onChange={(v) => setFluidField("urin", v)} />
                 <FieldNumber label="Muntah" value={fluid.muntah} onChange={(v) => setFluidField("muntah", v)} />
-              </FluidGroup>
-
-              <FluidGroup title="Output Lanjutan">
                 <FieldNumber label="Drainase" value={fluid.drainase} onChange={(v) => setFluidField("drainase", v)} />
                 <FieldNumber label="Feses Cair" value={fluid.feses} onChange={(v) => setFluidField("feses", v)} />
               </FluidGroup>
 
-              <FluidGroup title="Output Tambahan">
-                <FieldText
-                  label="Jenis Output Lainnya"
-                  value={fluid.lainOutputType}
-                  onChange={(v) => setFluidField("lainOutputType", v)}
-                  placeholder="Contoh: Aspirasi Lambung"
+              <FluidGroup title="Output Lainnya">
+                <AdditionalFluidSection
+                  items={fluid.additionalOutputs}
+                  onAdd={() => addAdditionalItem("additionalOutputs")}
+                  onRemove={(id) => removeAdditionalItem("additionalOutputs", id)}
+                  onTypeChange={(id, value) =>
+                    updateAdditionalItem("additionalOutputs", id, "type", value)
+                  }
+                  onValueChange={(id, value) =>
+                    updateAdditionalItem("additionalOutputs", id, "value", value)
+                  }
+                  addLabel="+ Tambah Output Lainnya"
                 />
-                <FieldNumber label="Nilai Output Lainnya" value={fluid.lainOutputValue} onChange={(v) => setFluidField("lainOutputValue", v)} />
               </FluidGroup>
             </div>
 
@@ -1188,10 +1317,11 @@ export default function Home() {
 }
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:ring-4 ${hasError
-    ? "border-rose-400 focus:border-rose-400 focus:ring-rose-100"
-    : "border-slate-300 focus:border-blue-400 focus:ring-blue-100"
-    }`;
+  return `w-full rounded-2xl border bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:ring-4 ${
+    hasError
+      ? "border-rose-400 focus:border-rose-400 focus:ring-rose-100"
+      : "border-slate-300 focus:border-blue-400 focus:ring-blue-100"
+  }`;
 }
 
 function FormField({
@@ -1307,6 +1437,66 @@ function ResultCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function AdditionalFluidSection({
+  items,
+  onAdd,
+  onRemove,
+  onTypeChange,
+  onValueChange,
+  addLabel,
+}: {
+  items: AdditionalFluidItem[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onTypeChange: (id: string, value: string) => void;
+  onValueChange: (id: string, value: string) => void;
+  addLabel: string;
+}) {
+  return (
+    <div className="space-y-4">
+      {items.map((item, index) => (
+        <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-bold text-slate-700">Item {index + 1}</p>
+            <button
+              type="button"
+              onClick={() => onRemove(item.id)}
+              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100"
+            >
+              Hapus
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <FieldText
+              label="Jenis"
+              value={item.type}
+              onChange={(value) => onTypeChange(item.id, value)}
+              placeholder="Contoh: Nutrisi Enteral / Aspirasi Lambung"
+            />
+            <FieldNumber
+              label="Nilai"
+              value={item.value}
+              onChange={(value) => onValueChange(item.id, value)}
+            />
+          </div>
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={items.length >= MAX_ADDITIONAL_ITEMS}
+        className="w-full rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+      >
+        {items.length >= MAX_ADDITIONAL_ITEMS
+          ? `Maksimal ${MAX_ADDITIONAL_ITEMS} item`
+          : addLabel}
+      </button>
+    </div>
+  );
+}
+
 function FormulaPanel({
   patient,
   fluid,
@@ -1327,18 +1517,18 @@ function FormulaPanel({
     toNumber(fluid.infus) +
     toNumber(fluid.obat) +
     toNumber(fluid.transfusi) +
-    toNumber(fluid.lainIntakeValue);
+    sumAdditionalItems(fluid.additionalIntakes);
 
   const totalOutput =
     toNumber(fluid.urin) +
     toNumber(fluid.muntah) +
     toNumber(fluid.drainase) +
     toNumber(fluid.feses) +
-    toNumber(fluid.lainOutputValue);
+    sumAdditionalItems(fluid.additionalOutputs);
 
   const baseIwl =
     patient.ageCategory === "dewasa (>18 Thn)"
-      ? 0.5 * weightNum * 24
+      ? 15 * weightNum
       : result.bsa
         ? 350 * result.bsa
         : 0;
@@ -1368,7 +1558,7 @@ function FormulaPanel({
 
           {patient.ageCategory === "dewasa (>18 Thn)" ? (
             <p>
-              IWL normal dewasa = 15 × BB / 24 = 15 × {weightNum.toFixed(1)} / 24 ={" "}
+              IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
               <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
             </p>
           ) : (
