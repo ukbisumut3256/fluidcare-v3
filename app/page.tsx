@@ -55,14 +55,15 @@ type PatientErrors = {
 type CalculationResult = {
   totalIntake: number;
   totalOutput: number;
-  iwl: number;
-  bsa: number | null;
+  iwlNormal: number;
+  iwlFever: number | null;
   balanceStandard: number;
-  balanceCorrected: number;
+  balanceCorrected: number | null;
   statusStandard: BalanceStatus;
-  statusCorrected: BalanceStatus;
+  statusCorrected: BalanceStatus | null;
   methodLabel: string;
-  feverFactor: number;
+  hasFever: boolean;
+  feverAddition: number;
 };
 
 const STORAGE_KEY = "kalbaca-web-v7-data";
@@ -116,10 +117,6 @@ function formatMl(value: number) {
   return `${value.toFixed(1)} mL`;
 }
 
-function formatBsa(value: number | null) {
-  if (value === null || Number.isNaN(value)) return "-";
-  return `${value.toFixed(2)} m²`;
-}
 
 function getBalanceStatus(value: number): BalanceStatus {
   if (value > 0) return "Positif";
@@ -127,13 +124,13 @@ function getBalanceStatus(value: number): BalanceStatus {
   return "Seimbang";
 }
 
-function getStatusClass(status: BalanceStatus) {
+function getStatusClass(status: BalanceStatus | null) {
   if (status === "Positif") return "text-emerald-600";
   if (status === "Negatif") return "text-rose-600";
   return "text-amber-600";
 }
 
-function getInterpretationText(status: BalanceStatus) {
+function getInterpretationText(status: BalanceStatus | null) {
   if (status === "Positif") {
     return "Cenderung positif, perlu evaluasi klinis lanjutan.";
   }
@@ -192,12 +189,12 @@ function validatePatient(patient: PatientForm): PatientErrors {
     errors.weight = "Berat badan tidak boleh lebih dari 300 kg.";
   }
 
-  if (!patient.height.trim()) {
-    errors.height = "Tinggi badan wajib diisi.";
-  } else if (height <= 0) {
-    errors.height = "Tinggi badan harus lebih dari 0 cm.";
-  } else if (height < 30 || height > 250) {
-    errors.height = "Tinggi badan harus di antara 30 cm sampai 250 cm.";
+  if (patient.height.trim()) {
+    if (height <= 0) {
+      errors.height = "Tinggi badan harus lebih dari 0 cm.";
+    } else if (height < 30 || height > 250) {
+      errors.height = "Tinggi badan harus di antara 30 cm sampai 250 cm.";
+    }
   }
 
   if (!patient.temperature.trim()) {
@@ -299,7 +296,6 @@ export default function Home() {
   const formReady = officerReady && patientReady;
 
   const weightNum = toNumber(patient.weight);
-  const heightNum = toNumber(patient.height);
   const temperatureNum = toNumber(patient.temperature);
 
   useEffect(() => {
@@ -460,41 +456,37 @@ export default function Home() {
       toNumber(fluid.feses) +
       sumAdditionalItems(fluid.additionalOutputs);
 
-    const balanceStandard = totalIntake - totalOutput;
+    const ageNum = toNumber(patient.age);
+    const hasFever = temperatureNum > 37;
 
-    let baseIwl = 0;
-    let finalIwl = 0;
-    let bsa: number | null = null;
-    let methodLabel = "";
+    const iwlNormal =
+      patient.ageCategory === "dewasa (>18 Thn)"
+        ? 15 * weightNum
+        : (30 - ageNum) * weightNum;
 
-    if (patient.ageCategory === "dewasa (>18 Thn)") {
-      baseIwl = 15 * weightNum;
-      methodLabel = "Metode dewasa";
-    } else {
-      bsa = Math.sqrt((heightNum * weightNum) / 3600);
-      baseIwl = 350 * bsa;
-      methodLabel = "Metode anak (BSA)";
-    }
+    const feverAddition = hasFever ? 200 * (temperatureNum - 37) : 0;
+    const iwlFever = hasFever ? iwlNormal + feverAddition : null;
 
-    let feverFactor = 1;
-    if (temperatureNum > 37) {
-      feverFactor = 1 + 0.1 * (temperatureNum - 37);
-    }
-
-    finalIwl = baseIwl * feverFactor;
-    const balanceCorrected = totalIntake - (totalOutput + finalIwl);
+    const balanceStandard = totalIntake - (totalOutput + iwlNormal);
+    const balanceCorrected = hasFever && iwlFever !== null
+      ? totalIntake - (totalOutput + iwlFever)
+      : null;
 
     setResult({
       totalIntake,
       totalOutput,
-      iwl: finalIwl,
-      bsa,
+      iwlNormal,
+      iwlFever,
       balanceStandard,
       balanceCorrected,
       statusStandard: getBalanceStatus(balanceStandard),
-      statusCorrected: getBalanceStatus(balanceCorrected),
-      methodLabel,
-      feverFactor,
+      statusCorrected: balanceCorrected !== null ? getBalanceStatus(balanceCorrected) : null,
+      methodLabel:
+        patient.ageCategory === "dewasa (>18 Thn)"
+          ? "Metode dewasa: IWL 15 × BB"
+          : "Metode anak tanpa BSA: IWL (30 - usia) × BB",
+      hasFever,
+      feverAddition,
     });
   }
 
@@ -575,17 +567,14 @@ export default function Home() {
         toNumber(fluid.feses) +
         sumAdditionalItems(fluid.additionalOutputs);
 
-      const baseIwl =
-        patient.ageCategory === "dewasa (>18 Thn)"
-          ? 15 * weightNum
-          : result.bsa
-            ? 350 * result.bsa
-            : 0;
+      const ageNum = toNumber(patient.age);
+      const baseIwl = result.iwlNormal;
+      const mainStatus = result.statusCorrected ?? result.statusStandard;
 
       const statusColor: RGB =
-        result.statusCorrected === "Positif"
+        mainStatus === "Positif"
           ? success
-          : result.statusCorrected === "Negatif"
+          : mainStatus === "Negatif"
             ? danger
             : warning;
 
@@ -716,10 +705,10 @@ export default function Home() {
       const summaryCards = [
         { x: 10, y: 98, w: 58, h: 24, label: "Total Intake", value: formatMl(result.totalIntake) },
         { x: 72, y: 98, w: 58, h: 24, label: "Total Output", value: formatMl(result.totalOutput) },
-        { x: 134, y: 98, w: 58, h: 24, label: "Estimasi IWL", value: formatMl(result.iwl) },
-        { x: 10, y: 126, w: 58, h: 24, label: "BSA (Anak)", value: formatBsa(result.bsa) },
+        { x: 134, y: 98, w: 58, h: 24, label: "IWL Normal", value: formatMl(result.iwlNormal) },
+        { x: 10, y: 126, w: 58, h: 24, label: result.hasFever ? "IWL Demam" : "Status Demam", value: result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam" },
         { x: 72, y: 126, w: 58, h: 24, label: "Balance Standar", value: formatMl(result.balanceStandard) },
-        { x: 134, y: 126, w: 58, h: 24, label: "Balance Terkoreksi", value: formatMl(result.balanceCorrected) },
+        { x: 134, y: 126, w: 58, h: 24, label: result.hasFever ? "Balance Terkoreksi" : "Koreksi Demam", value: result.balanceCorrected !== null ? formatMl(result.balanceCorrected) : "Tidak muncul" },
       ];
 
       summaryCards.forEach((card) => {
@@ -744,13 +733,13 @@ export default function Home() {
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text(`STATUS BALANCE TERKOREKSI: ${result.statusCorrected.toUpperCase()}`, 105, 164, {
+      doc.text(`${result.hasFever ? "STATUS BALANCE TERKOREKSI" : "STATUS BALANCE"}: ${mainStatus.toUpperCase()}`, 105, 164, {
         align: "center",
       });
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(getInterpretationText(result.statusCorrected), 105, 170, {
+      doc.text(getInterpretationText(mainStatus), 105, 170, {
         align: "center",
       });
 
@@ -827,10 +816,7 @@ export default function Home() {
       doc.setFontSize(11);
       doc.text("RUMUS DAN VALIDASI HASIL", 10, nextY);
 
-      const formulaLines: string[] = [
-        `Balance Standar = Intake - Output = ${totalIntake.toFixed(1)} - ${totalOutput.toFixed(1)} = ${result.balanceStandard.toFixed(1)} mL`,
-        `Balance Terkoreksi = Intake - (Output + IWL) = ${result.totalIntake.toFixed(1)} - (${result.totalOutput.toFixed(1)} + ${result.iwl.toFixed(1)}) = ${result.balanceCorrected.toFixed(1)} mL`,
-      ];
+      const formulaLines: string[] = [];
 
       if (patient.ageCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
@@ -838,19 +824,23 @@ export default function Home() {
         );
       } else {
         formulaLines.push(
-          `BSA = sqrt[(TB x BB) / 3600] = sqrt[(${heightNum.toFixed(1)} x ${weightNum.toFixed(1)}) / 3600] = ${result.bsa?.toFixed(2) ?? "-"} m²`
-        );
-        formulaLines.push(
-          `IWL normal anak = 350 x BSA = 350 x ${result.bsa?.toFixed(2) ?? "-"} = ${baseIwl.toFixed(1)} mL/hari`
+          `IWL normal anak = (30 - usia) x BB = (30 - ${ageNum.toFixed(1)}) x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
         );
       }
 
-      if (temperatureNum > 37) {
+      formulaLines.push(
+        `Balance cairan standar = Intake - (Output + IWL normal) = ${totalIntake.toFixed(1)} - (${totalOutput.toFixed(1)} + ${result.iwlNormal.toFixed(1)}) = ${result.balanceStandard.toFixed(1)} mL`
+      );
+
+      if (result.hasFever && result.iwlFever !== null && result.balanceCorrected !== null) {
         formulaLines.push(
-          `Koreksi demam = IWL x [1 + (0,1 x (Suhu - 37))] = ${baseIwl.toFixed(1)} x ${result.feverFactor.toFixed(2)} = ${result.iwl.toFixed(1)} mL/hari`
+          `IWL demam/koreksi = IWL normal + 200 x (Suhu - 37) = ${result.iwlNormal.toFixed(1)} + 200 x (${temperatureNum.toFixed(1)} - 37) = ${result.iwlFever.toFixed(1)} mL/hari`
+        );
+        formulaLines.push(
+          `Balance cairan terkoreksi = Intake - (Output + IWL demam) = ${result.totalIntake.toFixed(1)} - (${result.totalOutput.toFixed(1)} + ${result.iwlFever.toFixed(1)}) = ${result.balanceCorrected.toFixed(1)} mL`
         );
       } else {
-        formulaLines.push(`Tidak ada koreksi demam karena suhu <= 37°C. IWL akhir = ${result.iwl.toFixed(1)} mL/hari`);
+        formulaLines.push("Tidak ada koreksi demam karena suhu <= 37°C, sehingga bagian balance terkoreksi tidak ditampilkan.");
       }
 
       const formulaText = formulaLines.map((line, index) => `${index + 1}. ${line}`);
@@ -982,8 +972,8 @@ export default function Home() {
                 <p className="mt-4 max-w-4xl text-sm md:text-lg leading-7 text-white/95">
                   Kalkulator Balance Cairan berbasis website untuk membantu
                   pencatatan intake-output yang lebih terstandar, menghitung
-                  balance cairan lebih cepat, dan menambahkan estimasi IWL
-                  normal maupun demam pada pasien dewasa dan anak.
+                  balance cairan lebih cepat, serta menghitung IWL normal dan
+                  koreksi demam sesuai rumus dewasa maupun anak tanpa BSA.
                 </p>
               </div>
 
@@ -1025,7 +1015,7 @@ export default function Home() {
                 <p className="mt-2 text-slate-600 leading-7">
                   Isi data dasar pasien untuk menyesuaikan perhitungan IWL dan
                   balance cairan terkoreksi. Semua field wajib diisi sebelum
-                  bagian pencatatan cairan bisa digunakan.
+                  bagian pencatatan cairan bisa digunakan. Tinggi badan bersifat opsional karena rumus anak tidak lagi menggunakan BSA.
                 </p>
               </div>
               <div className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700">
@@ -1085,7 +1075,7 @@ export default function Home() {
                 />
               </FormField>
 
-              <FormField label="Tinggi Badan (cm)" error={patientErrors.height}>
+              <FormField label="Tinggi Badan (cm) - Opsional" error={patientErrors.height}>
                 <input
                   type="number"
                   min={30}
@@ -1245,10 +1235,10 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <ResultCard label="Total Intake" value={result ? formatMl(result.totalIntake) : "0 mL"} />
               <ResultCard label="Total Output" value={result ? formatMl(result.totalOutput) : "0 mL"} />
-              <ResultCard label="Estimasi IWL" value={result ? formatMl(result.iwl) : "0 mL"} />
-              <ResultCard label="BSA (Anak)" value={result ? formatBsa(result.bsa) : "-"} />
+              <ResultCard label="IWL Normal" value={result ? formatMl(result.iwlNormal) : "0 mL"} />
+              <ResultCard label="IWL Demam / Koreksi" value={result?.iwlFever !== null && result?.iwlFever !== undefined ? formatMl(result.iwlFever) : "Tidak muncul"} />
               <ResultCard label="Balance Standar" value={result ? formatMl(result.balanceStandard) : "0 mL"} />
-              <ResultCard label="Balance Terkoreksi" value={result ? formatMl(result.balanceCorrected) : "0 mL"} />
+              <ResultCard label="Balance Terkoreksi" value={result?.balanceCorrected !== null && result?.balanceCorrected !== undefined ? formatMl(result.balanceCorrected) : "Tidak muncul"} />
             </div>
 
             <div className="mt-5 rounded-3xl border border-blue-200 bg-blue-50 p-4 leading-7 text-slate-700">
@@ -1267,12 +1257,18 @@ export default function Home() {
                       {result.statusStandard}
                     </span>
                   </p>
-                  <p>
-                    Status Balance Terkoreksi:{" "}
-                    <span className={`font-bold ${getStatusClass(result.statusCorrected)}`}>
-                      {result.statusCorrected}
-                    </span>
-                  </p>
+                  {result.hasFever && result.statusCorrected ? (
+                    <p>
+                      Status Balance Terkoreksi:{" "}
+                      <span className={`font-bold ${getStatusClass(result.statusCorrected)}`}>
+                        {result.statusCorrected}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-slate-600">
+                      Koreksi demam tidak ditampilkan karena suhu ≤ 37°C.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -1299,17 +1295,59 @@ export default function Home() {
                 fluid={fluid}
                 result={result}
                 weightNum={weightNum}
-                heightNum={heightNum}
                 temperatureNum={temperatureNum}
               />
             )}
 
             <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-800 leading-8">
-              Catatan: balance standar dihitung dari intake dikurangi output terukur.
-              Balance terkoreksi menambahkan estimasi IWL untuk memberikan gambaran
-              cairan yang lebih komprehensif.
+              Catatan: balance standar dihitung dari intake dikurangi output terukur dan IWL normal.
+              Balance terkoreksi hanya ditampilkan jika suhu pasien &gt;37°C.
             </div>
           </section>
+
+          <section className="rounded-[28px] bg-white p-6 shadow-sm border border-white">
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold text-slate-800">Tentang Aplikasi</h2>
+              <p className="mt-2 text-slate-600 leading-7">
+                Informasi profil aplikasi dibuat ringkas agar pengguna memahami tujuan,
+                pengembang, dan ruang penggunaan aplikasi.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8">
+                <p>
+                  <span className="font-bold text-slate-900">KalBaCa Web</span> merupakan
+                  aplikasi kalkulator balance cairan yang dikembangkan secara mandiri untuk
+                  membantu tenaga kesehatan melakukan pencatatan intake-output dan perhitungan
+                  keseimbangan cairan pasien secara cepat, praktis, dan terstandar, khususnya
+                  di Instalasi Gawat Darurat (IGD).
+                </p>
+                <p className="mt-3">
+                  Aplikasi ini dibuat sebagai bentuk inovasi pelayanan keperawatan dan
+                  disusun berdasarkan kebutuhan penggunaan di lapangan serta referensi ilmiah
+                  terkait manajemen cairan pasien. Referensi penelitian terdahulu digunakan
+                  sebagai landasan akademik, bukan sebagai penyalinan kode, desain, atau sistem.
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-slate-700 leading-8">
+                <h3 className="font-bold text-slate-900 text-lg">Profil Pengembangan</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  <p><span className="font-bold">Pengembang:</span><br />Ramona Hotnida Sari Nasution</p>
+                  <p><span className="font-bold">Instansi:</span><br />RSUP Dr. M. Djamil Padang</p>
+                  <p><span className="font-bold">Tahun:</span><br />2026</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-800 leading-8">
+              Keterangan: aplikasi ini merupakan alat bantu perhitungan dan tidak menggantikan
+              penilaian klinis tenaga kesehatan. Hasil perhitungan tetap perlu disesuaikan
+              dengan kondisi pasien dan kebijakan pelayanan setempat.
+            </div>
+          </section>
+
         </div>
       </div>
     </main>
@@ -1502,14 +1540,12 @@ function FormulaPanel({
   fluid,
   result,
   weightNum,
-  heightNum,
   temperatureNum,
 }: {
   patient: PatientForm;
   fluid: FluidForm;
   result: CalculationResult;
   weightNum: number;
-  heightNum: number;
   temperatureNum: number;
 }) {
   const totalIntake =
@@ -1526,12 +1562,8 @@ function FormulaPanel({
     toNumber(fluid.feses) +
     sumAdditionalItems(fluid.additionalOutputs);
 
-  const baseIwl =
-    patient.ageCategory === "dewasa (>18 Thn)"
-      ? 15 * weightNum
-      : result.bsa
-        ? 350 * result.bsa
-        : 0;
+  const ageNum = toNumber(patient.age);
+  const baseIwl = result.iwlNormal;
 
   return (
     <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-700 leading-8">
@@ -1539,19 +1571,21 @@ function FormulaPanel({
         <div>
           <h3 className="font-bold text-slate-800 text-xl">Balance Standar</h3>
           <p>
-            Intake - Output = {totalIntake.toFixed(1)} - {totalOutput.toFixed(1)} ={" "}
+            Intake - (Output + IWL normal) = {totalIntake.toFixed(1)} - ({totalOutput.toFixed(1)} + {result.iwlNormal.toFixed(1)}) ={" "}
             <span className="font-bold">{result.balanceStandard.toFixed(1)} mL</span>
           </p>
         </div>
 
-        <div>
-          <h3 className="font-bold text-slate-800 text-xl">Balance Terkoreksi</h3>
-          <p>
-            Intake - (Output + IWL) = {result.totalIntake.toFixed(1)} - (
-            {result.totalOutput.toFixed(1)} + {result.iwl.toFixed(1)}) ={" "}
-            <span className="font-bold">{result.balanceCorrected.toFixed(1)} mL</span>
-          </p>
-        </div>
+        {result.hasFever && result.iwlFever !== null && result.balanceCorrected !== null && (
+          <div>
+            <h3 className="font-bold text-slate-800 text-xl">Balance Terkoreksi</h3>
+            <p>
+              Intake - (Output + IWL demam) = {result.totalIntake.toFixed(1)} - (
+              {result.totalOutput.toFixed(1)} + {result.iwlFever.toFixed(1)}) ={" "}
+              <span className="font-bold">{result.balanceCorrected.toFixed(1)} mL</span>
+            </p>
+          </div>
+        )}
 
         <div>
           <h3 className="font-bold text-slate-800 text-xl">Perhitungan IWL</h3>
@@ -1562,29 +1596,21 @@ function FormulaPanel({
               <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
             </p>
           ) : (
-            <>
-              <p>
-                BSA = √[(TB × BB) / 3600] = √[({heightNum.toFixed(1)} ×{" "}
-                {weightNum.toFixed(1)}) / 3600] ={" "}
-                <span className="font-bold">{result.bsa?.toFixed(2)} m²</span>
-              </p>
-              <p>
-                IWL normal anak = 350 × BSA = 350 × {result.bsa?.toFixed(2)} ={" "}
-                <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
-              </p>
-            </>
+            <p>
+              IWL normal anak = (30 - usia) × BB = (30 - {ageNum.toFixed(1)}) × {weightNum.toFixed(1)} ={" "}
+              <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
+            </p>
           )}
 
-          {temperatureNum > 37 ? (
+          {result.hasFever && result.iwlFever !== null ? (
             <p>
-              Koreksi demam = IWL × [1 + (0,1 × (Suhu - 37))] = {baseIwl.toFixed(1)} ×{" "}
-              {result.feverFactor.toFixed(2)} ={" "}
-              <span className="font-bold">{result.iwl.toFixed(1)} mL/hari</span>
+              IWL demam/koreksi = IWL normal + 200 × (Suhu - 37) = {baseIwl.toFixed(1)} + 200 × (
+              {temperatureNum.toFixed(1)} - 37) ={" "}
+              <span className="font-bold">{result.iwlFever.toFixed(1)} mL/hari</span>
             </p>
           ) : (
             <p>
-              Tidak ada koreksi demam karena suhu ≤ 37°C. Nilai IWL akhir ={" "}
-              <span className="font-bold">{result.iwl.toFixed(1)} mL/hari</span>
+              Tidak ada koreksi demam karena suhu ≤ 37°C, sehingga IWL demam dan balance terkoreksi tidak ditampilkan.
             </p>
           )}
         </div>
