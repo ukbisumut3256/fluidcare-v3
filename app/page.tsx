@@ -984,7 +984,7 @@ export default function Home() {
     <main className="min-h-screen bg-slate-100">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
         <section
-          className="relative overflow-hidden rounded-[32px] p-8 md:p-10 text-white shadow-xl mb-6"
+          className="relative rounded-[32px] p-8 md:p-10 text-white shadow-xl mb-6"
           style={{
             backgroundImage:
               "linear-gradient(135deg, rgba(29,78,216,0.88) 0%, rgba(14,165,233,0.82) 52%, rgba(103,232,249,0.72) 100%), url('/rsup-m-jamil.jpg')",
@@ -1009,7 +1009,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="absolute right-5 top-5 z-30 md:right-8 md:top-8">
+              <div className="absolute right-5 top-5 z-40 md:right-8 md:top-8">
                 <button
                   type="button"
                   onClick={() => setIsInfoMenuOpen((prev) => !prev)}
@@ -1025,36 +1025,40 @@ export default function Home() {
                 </button>
 
                 {isInfoMenuOpen && (
-                  <div className="absolute right-0 top-14 z-40 w-72 rounded-3xl border border-slate-200 bg-white p-3 text-slate-800 shadow-2xl">
-                    <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Menu
+                  <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-[320px] max-w-[calc(100vw-2rem)] rounded-[28px] border border-slate-200 bg-white p-3 text-slate-800 shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
+                    <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Menu Navigasi
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => openMenuPage("tentang")}
-                      className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition hover:bg-blue-50"
-                    >
-                      <span>
-                        <span className="block font-bold text-slate-900">Tentang Aplikasi</span>
-                        <span className="mt-1 block text-sm text-slate-500">
-                          Buka halaman informasi aplikasi
+
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => openMenuPage("tentang")}
+                        className="flex w-full items-start justify-between rounded-2xl border border-transparent bg-slate-50 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                      >
+                        <span className="pr-4">
+                          <span className="block text-base font-extrabold text-slate-900">Tentang Aplikasi</span>
+                          <span className="mt-1 block text-sm leading-6 text-slate-500">
+                            Buka halaman informasi aplikasi.
+                          </span>
                         </span>
-                      </span>
-                      <span className="text-xl text-slate-400">›</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openMenuPage("profil")}
-                      className="mt-2 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition hover:bg-blue-50"
-                    >
-                      <span>
-                        <span className="block font-bold text-slate-900">Profil Pengembangan</span>
-                        <span className="mt-1 block text-sm text-slate-500">
-                          Buka halaman profil pengembangan
+                        <span className="mt-1 text-2xl text-slate-400">›</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openMenuPage("profil")}
+                        className="flex w-full items-start justify-between rounded-2xl border border-transparent bg-slate-50 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                      >
+                        <span className="pr-4">
+                          <span className="block text-base font-extrabold text-slate-900">Profil Pengembangan</span>
+                          <span className="mt-1 block text-sm leading-6 text-slate-500">
+                            Buka halaman profil pengembangan.
+                          </span>
                         </span>
-                      </span>
-                      <span className="text-xl text-slate-400">›</span>
-                    </button>
+                        <span className="mt-1 text-2xl text-slate-400">›</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
