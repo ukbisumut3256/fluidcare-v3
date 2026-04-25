@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type AgeCategory = "dewasa (>18 Thn)" | "anak (<18 Thn)" | "";
 type BalanceStatus = "Positif" | "Negatif" | "Seimbang";
-type InfoTab = "tentang" | "profil";
+type AppView = "home" | "tentang" | "profil";
 
 type OfficerForm = {
   officerName: string;
@@ -289,8 +289,7 @@ export default function Home() {
   const [saveMessage, setSaveMessage] = useState("Belum ada perubahan disimpan.");
   const [isExporting, setIsExporting] = useState(false);
   const [isInfoMenuOpen, setIsInfoMenuOpen] = useState(false);
-  const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
-  const [activeInfoTab, setActiveInfoTab] = useState<InfoTab>("tentang");
+  const [currentView, setCurrentView] = useState<AppView>("home");
 
   const officerErrors = useMemo(() => validateOfficer(officer), [officer]);
   const patientErrors = useMemo(() => validatePatient(patient), [patient]);
@@ -382,7 +381,6 @@ export default function Home() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsInfoMenuOpen(false);
-        setIsInfoPanelOpen(false);
       }
     }
 
@@ -449,14 +447,14 @@ export default function Home() {
     setResult(null);
   }
 
-  function openInfoPanel(tab: InfoTab) {
-    setActiveInfoTab(tab);
-    setIsInfoPanelOpen(true);
+  function openMenuPage(view: Exclude<AppView, "home">) {
+    setCurrentView(view);
     setIsInfoMenuOpen(false);
   }
 
-  function closeInfoPanel() {
-    setIsInfoPanelOpen(false);
+  function backToHome() {
+    setCurrentView("home");
+    setIsInfoMenuOpen(false);
   }
 
   function calculate() {
@@ -974,6 +972,14 @@ export default function Home() {
     }
   }
 
+  if (currentView === "tentang") {
+    return <InfoPage variant="tentang" onBack={backToHome} />;
+  }
+
+  if (currentView === "profil") {
+    return <InfoPage variant="profil" onBack={backToHome} />;
+  }
+
   return (
     <main className="min-h-screen bg-slate-100">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
@@ -1003,15 +1009,11 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="relative flex items-start gap-3">
-                <div className="hidden md:inline-flex items-center rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm font-semibold backdrop-blur-sm">
-                  RSUP Dr. M. Djamil Padang
-                </div>
-
+              <div className="absolute right-5 top-5 z-30 md:right-8 md:top-8">
                 <button
                   type="button"
                   onClick={() => setIsInfoMenuOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-3 rounded-2xl border border-white/25 bg-white/15 px-4 py-3 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+                  className="inline-flex items-center gap-3 rounded-2xl border border-white/40 bg-white/20 px-4 py-3 text-sm font-bold text-white shadow-lg backdrop-blur-md transition hover:bg-white/30"
                   aria-label="Buka menu informasi"
                 >
                   <span className="flex flex-col gap-1">
@@ -1023,32 +1025,32 @@ export default function Home() {
                 </button>
 
                 {isInfoMenuOpen && (
-                  <div className="absolute right-0 top-16 z-30 w-72 rounded-3xl border border-slate-200 bg-white p-3 text-slate-800 shadow-2xl">
+                  <div className="absolute right-0 top-14 z-40 w-72 rounded-3xl border border-slate-200 bg-white p-3 text-slate-800 shadow-2xl">
                     <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Informasi Aplikasi
+                      Menu
                     </p>
                     <button
                       type="button"
-                      onClick={() => openInfoPanel("tentang")}
+                      onClick={() => openMenuPage("tentang")}
                       className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition hover:bg-blue-50"
                     >
                       <span>
                         <span className="block font-bold text-slate-900">Tentang Aplikasi</span>
                         <span className="mt-1 block text-sm text-slate-500">
-                          Tujuan, fungsi, dan keterangan penggunaan aplikasi
+                          Buka halaman informasi aplikasi
                         </span>
                       </span>
                       <span className="text-xl text-slate-400">›</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => openInfoPanel("profil")}
+                      onClick={() => openMenuPage("profil")}
                       className="mt-2 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition hover:bg-blue-50"
                     >
                       <span>
                         <span className="block font-bold text-slate-900">Profil Pengembangan</span>
                         <span className="mt-1 block text-sm text-slate-500">
-                          Informasi pengembang, instansi, dan tahun pembuatan
+                          Buka halaman profil pengembangan
                         </span>
                       </span>
                       <span className="text-xl text-slate-400">›</span>
@@ -1387,155 +1389,114 @@ export default function Home() {
         </div>
       </div>
 
-      <InfoSidePanel
-        isOpen={isInfoPanelOpen}
-        activeTab={activeInfoTab}
-        onClose={closeInfoPanel}
-        onTabChange={setActiveInfoTab}
-      />
     </main>
   );
 }
 
-function InfoSidePanel({
-  isOpen,
-  activeTab,
-  onClose,
-  onTabChange,
+function InfoPage({
+  variant,
+  onBack,
 }: {
-  isOpen: boolean;
-  activeTab: InfoTab;
-  onClose: () => void;
-  onTabChange: (tab: InfoTab) => void;
+  variant: Exclude<AppView, "home">;
+  onBack: () => void;
 }) {
-  if (!isOpen) return null;
+  const isAbout = variant === "tentang";
 
   return (
-    <div className="fixed inset-0 z-50">
-      <button
-        type="button"
-        aria-label="Tutup panel informasi"
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
-      />
+    <main className="min-h-screen bg-slate-100">
+      <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+        <section
+          className="relative overflow-hidden rounded-[32px] p-6 text-white shadow-xl md:p-8"
+          style={{
+            backgroundImage:
+              "linear-gradient(135deg, rgba(29,78,216,0.92) 0%, rgba(14,165,233,0.86) 55%, rgba(103,232,249,0.74) 100%), url('/rsup-m-jamil.jpg')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onBack}
+            className="absolute right-5 top-5 rounded-2xl border border-white/30 bg-white/20 px-4 py-2 text-sm font-bold text-white shadow-lg backdrop-blur-md transition hover:bg-white/30"
+          >
+            Kembali ke Halaman Awal
+          </button>
 
-      <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-slate-200 px-5 py-4 md:px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">
-                  Menu Informasi
-                </p>
-                <h2 className="mt-2 text-2xl font-black text-slate-900">
-                  {activeTab === "tentang" ? "Tentang Aplikasi" : "Profil Pengembangan"}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Informasi ini dibuat dalam bentuk panel menu agar tampilan utama web tetap ringkas.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Tutup
-              </button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => onTabChange("tentang")}
-                className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                  activeTab === "tentang"
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                Tentang Aplikasi
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onTabChange("profil")}
-                className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                  activeTab === "profil"
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                Profil Pengembangan
-              </button>
-            </div>
+          <div className="pt-12 md:pt-4">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/80">
+              KALBACA WEB
+            </p>
+            <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
+              {isAbout ? "Tentang Aplikasi" : "Profil Pengembangan"}
+            </h1>
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/95 md:text-lg">
+              {isAbout
+                ? "Informasi tujuan, fungsi, dan batasan penggunaan aplikasi KalBaCa Web."
+                : "Informasi pengembang, instansi, dan identitas pengembangan aplikasi."}
+            </p>
           </div>
+        </section>
 
-          <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6 md:py-6">
-            {activeTab === "tentang" ? (
-              <div className="space-y-4">
-                <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8">
-                  <p>
-                    <span className="font-bold text-slate-900">KalBaCa Web</span> merupakan
-                    aplikasi kalkulator balance cairan yang dikembangkan secara mandiri untuk
-                    membantu tenaga kesehatan melakukan pencatatan intake-output dan perhitungan
-                    keseimbangan cairan pasien secara cepat, praktis, dan terstandar, khususnya
-                    di Instalasi Gawat Darurat (IGD).
-                  </p>
-                  <p className="mt-3">
-                    Aplikasi ini dibuat sebagai bentuk inovasi pelayanan keperawatan dan
-                    disusun berdasarkan kebutuhan penggunaan di lapangan serta referensi ilmiah
-                    terkait manajemen cairan pasien. Referensi penelitian terdahulu digunakan
-                    sebagai landasan akademik, bukan sebagai penyalinan kode, desain, atau sistem.
-                  </p>
-                </div>
+        <section className="mt-6 rounded-[28px] border border-white bg-white p-5 shadow-sm md:p-7">
+          {isAbout ? (
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8 md:p-6">
+                <h2 className="text-2xl font-black text-slate-900">KalBaCa Web</h2>
+                <p className="mt-4">
+                  KalBaCa Web merupakan aplikasi kalkulator balance cairan yang
+                  dikembangkan secara mandiri untuk membantu tenaga kesehatan melakukan
+                  pencatatan intake-output dan perhitungan keseimbangan cairan pasien
+                  secara cepat, praktis, dan terstandar, khususnya di Instalasi Gawat
+                  Darurat (IGD).
+                </p>
+                <p className="mt-3">
+                  Aplikasi ini dibuat sebagai bentuk inovasi pelayanan keperawatan dan
+                  disusun berdasarkan kebutuhan penggunaan di lapangan serta referensi
+                  ilmiah terkait manajemen cairan pasien. Referensi penelitian terdahulu
+                  digunakan sebagai landasan akademik, bukan sebagai penyalinan kode,
+                  desain, atau sistem.
+                </p>
+              </div>
 
-                <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900 leading-8">
-                  <p>
-                    <span className="font-bold">Keterangan:</span> aplikasi ini merupakan alat bantu
-                    perhitungan dan tidak menggantikan penilaian klinis tenaga kesehatan.
-                    Hasil perhitungan tetap perlu disesuaikan dengan kondisi pasien dan kebijakan
-                    pelayanan setempat.
-                  </p>
+              <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900 leading-8 md:p-6">
+                <h3 className="text-lg font-black">Keterangan Penggunaan</h3>
+                <p className="mt-3">
+                  Aplikasi ini merupakan alat bantu perhitungan dan tidak menggantikan
+                  penilaian klinis tenaga kesehatan. Hasil perhitungan tetap perlu
+                  disesuaikan dengan kondisi pasien dan kebijakan pelayanan setempat.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 md:p-6">
+                <h2 className="text-2xl font-black text-slate-900">Identitas Pengembangan</h2>
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <ProfileInfo label="Pengembang" value="Ramona Hotnida Sari Nasution" />
+                  <ProfileInfo label="Instansi" value="RSUP Dr. M. Djamil Padang" />
+                  <ProfileInfo label="Tahun" value="2026" />
+                  <ProfileInfo label="Jenis Aplikasi" value="Web App Kalkulator Balance Cairan" />
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <h3 className="text-lg font-bold text-slate-900">Identitas Pengembangan</h3>
-                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-white bg-white p-4">
-                      <p className="text-sm text-slate-500">Pengembang</p>
-                      <p className="mt-2 text-base font-bold text-slate-900">
-                        Ramona Hotnida Sari Nasution
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-white bg-white p-4">
-                      <p className="text-sm text-slate-500">Instansi</p>
-                      <p className="mt-2 text-base font-bold text-slate-900">
-                        RSUP Dr. M. Djamil Padang
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-white bg-white p-4">
-                      <p className="text-sm text-slate-500">Tahun Pengembangan</p>
-                      <p className="mt-2 text-base font-bold text-slate-900">2026</p>
-                    </div>
-                    <div className="rounded-2xl border border-white bg-white p-4">
-                      <p className="text-sm text-slate-500">Jenis Aplikasi</p>
-                      <p className="mt-2 text-base font-bold text-slate-900">Web App Kalkulator Balance Cairan</p>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8">
-                  Panel ini sengaja dipisah dari halaman utama agar tampilan perhitungan tetap rapi,
-                  tidak memanjang ke bawah, dan informasi profil tetap mudah diakses melalui menu.
-                </div>
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8 md:p-6">
+                Profil ini dipisahkan dari halaman utama agar halaman perhitungan tetap
+                bersih, tidak memanjang ke bawah, dan informasi pengembang tetap mudah
+                diakses melalui menu di pojok kanan atas.
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </section>
       </div>
+    </main>
+  );
+}
+
+function ProfileInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+      <p className="text-sm font-semibold text-slate-500">{label}</p>
+      <p className="mt-2 text-base font-black text-slate-900">{value}</p>
     </div>
   );
 }
