@@ -169,8 +169,11 @@ function validatePatient(patient: PatientForm): PatientErrors {
     errors.age = "Usia tidak valid.";
   }
 
-  if (!patient.ageCategory) {
-    errors.ageCategory = "Kategori usia wajib dipilih.";
+  if (patient.age.trim() && age > 0) {
+    const expectedCategory: AgeCategory = age > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)";
+    if (patient.ageCategory && patient.ageCategory !== expectedCategory) {
+      errors.ageCategory = "Kategori usia tidak sesuai dengan usia pasien.";
+    }
   }
 
   if (!patient.weight.trim()) {
@@ -281,10 +284,15 @@ export default function Home() {
 
         if (parsed.officer) setOfficer(parsed.officer);
         if (parsed.patient) {
+          const restoredAge = parsed.patient.age ?? "";
+          const restoredAgeNumber = toNumber(restoredAge);
+          const restoredAgeCategory: AgeCategory =
+            restoredAgeNumber > 0 ? (restoredAgeNumber > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : "";
+
           setPatient({
             name: parsed.patient.name ?? "",
-            age: parsed.patient.age ?? "",
-            ageCategory: parsed.patient.ageCategory ?? "",
+            age: restoredAge,
+            ageCategory: restoredAgeCategory,
             weight: parsed.patient.weight ?? "",
             temperature: parsed.patient.temperature ?? "",
           });
@@ -374,7 +382,22 @@ export default function Home() {
   }
 
   function setPatientField<K extends keyof PatientForm>(key: K, value: PatientForm[K]) {
-    setPatient((prev) => ({ ...prev, [key]: value }));
+    setPatient((prev) => {
+      if (key === "age") {
+        const ageValue = String(value);
+        const ageNumber = toNumber(ageValue);
+        const automaticCategory: AgeCategory =
+          ageNumber > 0 ? (ageNumber > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : "";
+
+        return {
+          ...prev,
+          age: ageValue,
+          ageCategory: automaticCategory,
+        };
+      }
+
+      return { ...prev, [key]: value };
+    });
     setResult(null);
   }
 
@@ -462,8 +485,10 @@ export default function Home() {
     const ageNum = toNumber(patient.age);
     const hasFever = temperatureNum > 37;
 
+    const automaticAgeCategory: AgeCategory = ageNum > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)";
+
     const iwlNormal =
-      patient.ageCategory === "dewasa (>18 Thn)" ? 15 * weightNum : (30 - ageNum) * weightNum;
+      automaticAgeCategory === "dewasa (>18 Thn)" ? 15 * weightNum : (30 - ageNum) * weightNum;
 
     const feverAddition = hasFever ? 200 * (temperatureNum - 37) : 0;
     const iwlFever = hasFever ? iwlNormal + feverAddition : null;
@@ -482,7 +507,7 @@ export default function Home() {
       statusStandard: getBalanceStatus(balanceStandard),
       statusCorrected: balanceCorrected !== null ? getBalanceStatus(balanceCorrected) : null,
       methodLabel:
-        patient.ageCategory === "dewasa (>18 Thn)"
+        automaticAgeCategory === "dewasa (>18 Thn)"
           ? "Metode dewasa: IWL 15 × BB"
           : "Metode anak: IWL (30 - usia) × BB",
       hasFever,
@@ -567,6 +592,8 @@ export default function Home() {
         sumAdditionalItems(fluid.additionalOutputs);
 
       const ageNum = toNumber(patient.age);
+      const displayAgeCategory: AgeCategory =
+        ageNum > 0 ? (ageNum > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : patient.ageCategory;
       const baseIwl = result.iwlNormal;
       const mainStatus = result.statusCorrected ?? result.statusStandard;
       const statusColor: RGB =
@@ -678,7 +705,7 @@ export default function Home() {
       doc.text(`: ${patient.age || "-"} tahun`, 43, 70);
 
       doc.text("Kategori Usia", 92, 63);
-      doc.text(`: ${patient.ageCategory || "-"}`, 121, 63);
+      doc.text(`: ${displayAgeCategory || "-"}`, 121, 63);
 
       doc.text("Berat Badan", 92, 70);
       doc.text(`: ${patient.weight || "-"} kg`, 121, 70);
@@ -823,7 +850,7 @@ export default function Home() {
 
       const formulaLines: string[] = [];
 
-      if (patient.ageCategory === "dewasa (>18 Thn)") {
+      if (displayAgeCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
           `IWL normal dewasa = 15 x BB = 15 x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
         );
@@ -1046,7 +1073,7 @@ export default function Home() {
                 <h2 className="text-2xl font-bold text-slate-800">Data Pasien</h2>
                 <p className="mt-2 leading-7 text-slate-600">
                   Isi data dasar pasien untuk menyesuaikan perhitungan IWL dan balance cairan terkoreksi.
-                  Semua field wajib diisi sebelum bagian pencatatan cairan bisa digunakan.
+                  Kategori usia akan terisi otomatis dari usia pasien agar tidak terjadi kesalahan input.
                 </p>
               </div>
               <span className="shrink-0 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700">
@@ -1081,16 +1108,22 @@ export default function Home() {
                 />
               </FormField>
 
-              <FormField label="Kategori Usia" error={patientErrors.ageCategory}>
-                <select
-                  value={patient.ageCategory}
-                  onChange={(e) => setPatientField("ageCategory", e.target.value as AgeCategory)}
-                  className={inputClass(!!patientErrors.ageCategory)}
+              <FormField label="Kategori Usia Otomatis" error={patientErrors.ageCategory}>
+                <div
+                  className={`w-full rounded-2xl border px-4 py-3 font-bold ${
+                    patientErrors.ageCategory
+                      ? "border-rose-400 bg-rose-50 text-rose-700"
+                      : patient.ageCategory
+                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                        : "border-slate-300 bg-slate-50 text-slate-400"
+                  }`}
                 >
-                  <option value="">Pilih kategori</option>
-                  <option value="dewasa (>18 Thn)">Dewasa (&gt;18 Thn)</option>
-                  <option value="anak (<18 Thn)">Anak (&lt;18 Thn)</option>
-                </select>
+                  {patient.ageCategory
+                    ? patient.ageCategory === "dewasa (>18 Thn)"
+                      ? "Dewasa (>18 Thn)"
+                      : "Anak (<18 Thn)"
+                    : "Terisi otomatis setelah usia diisi"}
+                </div>
               </FormField>
 
               <FormField label="Berat Badan (kg)" error={patientErrors.weight}>
@@ -1120,8 +1153,13 @@ export default function Home() {
               </FormField>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
-              {saveMessage}
+            <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm leading-6 text-blue-800">
+                Kategori otomatis: usia ≤18 tahun masuk Anak, usia &gt;18 tahun masuk Dewasa.
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+                {saveMessage}
+              </div>
             </div>
           </section>
 
@@ -1567,6 +1605,8 @@ function FormulaPanel({
   const ageNum = toNumber(patient.age);
   const weightNum = toNumber(patient.weight);
   const temperatureNum = toNumber(patient.temperature);
+  const automaticAgeCategory: AgeCategory =
+    ageNum > 0 ? (ageNum > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : patient.ageCategory;
 
   return (
     <div className="mt-5 rounded-[28px] border border-slate-200 bg-white p-5">
@@ -1591,7 +1631,7 @@ function FormulaPanel({
 
         <div>
           <h4 className="font-bold text-slate-800">IWL Normal</h4>
-          {patient.ageCategory === "dewasa (>18 Thn)" ? (
+          {automaticAgeCategory === "dewasa (>18 Thn)" ? (
             <p>
               IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
               <span className="font-bold">{result.iwlNormal.toFixed(1)} mL/hari</span>
