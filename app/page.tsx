@@ -16,7 +16,6 @@ type PatientForm = {
   age: string;
   ageCategory: AgeCategory;
   weight: string;
-  height: string;
   temperature: string;
 };
 
@@ -31,6 +30,7 @@ type FluidForm = {
   infus: string;
   obat: string;
   transfusi: string;
+  airMetabolisme: string;
   additionalIntakes: AdditionalFluidItem[];
   urin: string;
   muntah: string;
@@ -49,7 +49,6 @@ type PatientErrors = {
   age?: string;
   ageCategory?: string;
   weight?: string;
-  height?: string;
   temperature?: string;
 };
 
@@ -67,7 +66,7 @@ type CalculationResult = {
   feverAddition: number;
 };
 
-const STORAGE_KEY = "kalbaca-web-v7-data";
+const STORAGE_KEY = "fluidacare-web-v8-data";
 const MAX_ADDITIONAL_ITEMS = 5;
 
 const initialOfficerForm: OfficerForm = {
@@ -79,7 +78,6 @@ const initialPatientForm: PatientForm = {
   age: "",
   ageCategory: "",
   weight: "",
-  height: "",
   temperature: "",
 };
 
@@ -96,6 +94,7 @@ const initialFluidForm: FluidForm = {
   infus: "",
   obat: "",
   transfusi: "",
+  airMetabolisme: "",
   additionalIntakes: [createAdditionalItem()],
   urin: "",
   muntah: "",
@@ -118,7 +117,6 @@ function formatMl(value: number) {
   return `${value.toFixed(1)} mL`;
 }
 
-
 function getBalanceStatus(value: number): BalanceStatus {
   if (value > 0) return "Positif";
   if (value < 0) return "Negatif";
@@ -132,18 +130,13 @@ function getStatusClass(status: BalanceStatus | null) {
 }
 
 function getInterpretationText(status: BalanceStatus | null) {
-  if (status === "Positif") {
-    return "Cenderung positif, perlu evaluasi klinis lanjutan.";
-  }
-  if (status === "Negatif") {
-    return "Cenderung negatif, perlu verifikasi intake-output dan kondisi pasien.";
-  }
+  if (status === "Positif") return "Cenderung positif, perlu evaluasi klinis lanjutan.";
+  if (status === "Negatif") return "Cenderung negatif, perlu verifikasi intake-output dan kondisi pasien.";
   return "Seimbang, tetap lanjutkan monitoring klinis.";
 }
 
 function validateOfficer(officer: OfficerForm): OfficerErrors {
   const errors: OfficerErrors = {};
-
   if (!officer.officerName.trim()) {
     errors.officerName = "Nama petugas wajib diisi.";
   } else if (officer.officerName.trim().length < 2) {
@@ -151,7 +144,6 @@ function validateOfficer(officer: OfficerForm): OfficerErrors {
   } else if (officer.officerName.trim().length > 100) {
     errors.officerName = "Nama petugas terlalu panjang.";
   }
-
   return errors;
 }
 
@@ -159,7 +151,6 @@ function validatePatient(patient: PatientForm): PatientErrors {
   const errors: PatientErrors = {};
   const age = toNumber(patient.age);
   const weight = toNumber(patient.weight);
-  const height = toNumber(patient.height);
   const temperature = toNumber(patient.temperature);
 
   if (!patient.name.trim()) {
@@ -190,14 +181,6 @@ function validatePatient(patient: PatientForm): PatientErrors {
     errors.weight = "Berat badan tidak boleh lebih dari 300 kg.";
   }
 
-  if (patient.height.trim()) {
-    if (height <= 0) {
-      errors.height = "Tinggi badan harus lebih dari 0 cm.";
-    } else if (height < 30 || height > 250) {
-      errors.height = "Tinggi badan harus di antara 30 cm sampai 250 cm.";
-    }
-  }
-
   if (!patient.temperature.trim()) {
     errors.temperature = "Suhu tubuh wajib diisi.";
   } else if (temperature < 30 || temperature > 45) {
@@ -212,10 +195,7 @@ function hasErrors(errors: Record<string, string | undefined>) {
 }
 
 function sanitizeFileName(name: string) {
-  return name
-    .trim()
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\s+/g, "_");
+  return name.trim().replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "_");
 }
 
 function formatDateDisplay(date: Date) {
@@ -225,7 +205,6 @@ function formatDateDisplay(date: Date) {
   const hh = String(date.getHours()).padStart(2, "0");
   const min = String(date.getMinutes()).padStart(2, "0");
   const ss = String(date.getSeconds()).padStart(2, "0");
-
   return `${dd}/${mm}/${yyyy}, ${hh}:${min}:${ss}`;
 }
 
@@ -235,7 +214,6 @@ function formatDateTimeForFile(date: Date) {
   const yyyy = date.getFullYear();
   const hh = String(date.getHours()).padStart(2, "0");
   const min = String(date.getMinutes()).padStart(2, "0");
-
   return `${dd}-${mm}-${yyyy} ${hh}-${min}`;
 }
 
@@ -251,12 +229,8 @@ function toTitleCase(text: string) {
 
 async function loadImageAsDataUrl(src: string) {
   const response = await fetch(src);
-  if (!response.ok) {
-    throw new Error(`Gagal memuat gambar: ${src}`);
-  }
-
+  if (!response.ok) throw new Error(`Gagal memuat gambar: ${src}`);
   const blob = await response.blob();
-
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(String(reader.result));
@@ -266,9 +240,7 @@ async function loadImageAsDataUrl(src: string) {
 }
 
 function normalizeAdditionalItems(items: unknown): AdditionalFluidItem[] {
-  if (!Array.isArray(items) || items.length === 0) {
-    return [createAdditionalItem()];
-  }
+  if (!Array.isArray(items) || items.length === 0) return [createAdditionalItem()];
 
   return items.slice(0, MAX_ADDITIONAL_ITEMS).map((item, index) => {
     const safeItem = item as Partial<AdditionalFluidItem>;
@@ -306,8 +278,17 @@ export default function Home() {
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
+
         if (parsed.officer) setOfficer(parsed.officer);
-        if (parsed.patient) setPatient(parsed.patient);
+        if (parsed.patient) {
+          setPatient({
+            name: parsed.patient.name ?? "",
+            age: parsed.patient.age ?? "",
+            ageCategory: parsed.patient.ageCategory ?? "",
+            weight: parsed.patient.weight ?? "",
+            temperature: parsed.patient.temperature ?? "",
+          });
+        }
 
         if (parsed.fluid) {
           setFluid({
@@ -315,6 +296,8 @@ export default function Home() {
             infus: parsed.fluid.infus === "0" ? "" : parsed.fluid.infus ?? "",
             obat: parsed.fluid.obat === "0" ? "" : parsed.fluid.obat ?? "",
             transfusi: parsed.fluid.transfusi === "0" ? "" : parsed.fluid.transfusi ?? "",
+            airMetabolisme:
+              parsed.fluid.airMetabolisme === "0" ? "" : parsed.fluid.airMetabolisme ?? "",
             additionalIntakes: normalizeAdditionalItems(
               parsed.fluid.additionalIntakes ??
                 (parsed.fluid.lainIntakeType || parsed.fluid.lainIntakeValue
@@ -353,7 +336,6 @@ export default function Home() {
           });
         }
 
-        if (parsed.result) setResult(parsed.result);
         setSaveMessage("Data terakhir berhasil dimuat dari penyimpanan lokal.");
       } catch {
         setSaveMessage("Data lokal ditemukan, tetapi gagal dibaca.");
@@ -379,9 +361,7 @@ export default function Home() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsInfoMenuOpen(false);
-      }
+      if (event.key === "Escape") setIsInfoMenuOpen(false);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -414,9 +394,7 @@ export default function Home() {
 
     setFluid((prev) => ({
       ...prev,
-      [group]: prev[group].map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      ),
+      [group]: prev[group].map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     }));
     setResult(null);
   }
@@ -471,6 +449,7 @@ export default function Home() {
       toNumber(fluid.infus) +
       toNumber(fluid.obat) +
       toNumber(fluid.transfusi) +
+      toNumber(fluid.airMetabolisme) +
       sumAdditionalItems(fluid.additionalIntakes);
 
     const totalOutput =
@@ -484,17 +463,14 @@ export default function Home() {
     const hasFever = temperatureNum > 37;
 
     const iwlNormal =
-      patient.ageCategory === "dewasa (>18 Thn)"
-        ? 15 * weightNum
-        : (30 - ageNum) * weightNum;
+      patient.ageCategory === "dewasa (>18 Thn)" ? 15 * weightNum : (30 - ageNum) * weightNum;
 
     const feverAddition = hasFever ? 200 * (temperatureNum - 37) : 0;
     const iwlFever = hasFever ? iwlNormal + feverAddition : null;
 
     const balanceStandard = totalIntake - (totalOutput + iwlNormal);
-    const balanceCorrected = hasFever && iwlFever !== null
-      ? totalIntake - (totalOutput + iwlFever)
-      : null;
+    const balanceCorrected =
+      hasFever && iwlFever !== null ? totalIntake - (totalOutput + iwlFever) : null;
 
     setResult({
       totalIntake,
@@ -508,7 +484,7 @@ export default function Home() {
       methodLabel:
         patient.ageCategory === "dewasa (>18 Thn)"
           ? "Metode dewasa: IWL 15 × BB"
-          : "Metode anak tanpa BSA: IWL (30 - usia) × BB",
+          : "Metode anak: IWL (30 - usia) × BB",
       hasFever,
       feverAddition,
     });
@@ -549,7 +525,6 @@ export default function Home() {
 
       const jsPDF = jsPDFModule.default;
       const autoTable = autoTableModule.default;
-
       const doc = new jsPDF("p", "mm", "a4");
 
       type RGB = readonly [number, number, number];
@@ -573,7 +548,6 @@ export default function Home() {
       const now = new Date();
       const exportDateDisplay = formatDateDisplay(now);
       const exportDateForFile = formatDateTimeForFile(now);
-
       const patientName = patient.name?.trim() || "Tanpa_Nama";
       const safePatientName = sanitizeFileName(patientName);
 
@@ -582,6 +556,7 @@ export default function Home() {
         toNumber(fluid.infus) +
         toNumber(fluid.obat) +
         toNumber(fluid.transfusi) +
+        toNumber(fluid.airMetabolisme) +
         sumAdditionalItems(fluid.additionalIntakes);
 
       const totalOutput =
@@ -594,16 +569,9 @@ export default function Home() {
       const ageNum = toNumber(patient.age);
       const baseIwl = result.iwlNormal;
       const mainStatus = result.statusCorrected ?? result.statusStandard;
-
       const statusColor: RGB =
-        mainStatus === "Positif"
-          ? success
-          : mainStatus === "Negatif"
-            ? danger
-            : warning;
+        mainStatus === "Positif" ? success : mainStatus === "Negatif" ? danger : warning;
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
       const additionalNotes = fluid.additionalNotes.trim();
       const officerDisplayName = toTitleCase(officer.officerName);
 
@@ -674,7 +642,7 @@ export default function Home() {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text("RSUP Dr. M. Djamil Padang • KALBACA WEB", 38, 28);
+      doc.text("RSUP Dr. M. Djamil Padang • FluidaCare", 38, 28);
 
       doc.setFillColor(255, 255, 255);
       doc.setGState(new (doc as any).GState({ opacity: 0.92 }));
@@ -691,9 +659,9 @@ export default function Home() {
       doc.text(exportDateDisplay, 172, 25, { align: "center" });
 
       setFill(lightBlue);
-      doc.roundedRect(10, 46, 190, 38, 5, 5, "F");
+      doc.roundedRect(10, 46, 190, 31, 5, 5, "F");
       setDraw(border);
-      doc.roundedRect(10, 46, 190, 38, 5, 5, "S");
+      doc.roundedRect(10, 46, 190, 31, 5, 5, "S");
 
       setText(primary);
       doc.setFont("helvetica", "bold");
@@ -709,30 +677,41 @@ export default function Home() {
       doc.text("Usia", 14, 70);
       doc.text(`: ${patient.age || "-"} tahun`, 43, 70);
 
-      doc.text("Kategori Usia", 14, 77);
-      doc.text(`: ${patient.ageCategory || "-"}`, 43, 77);
+      doc.text("Kategori Usia", 92, 63);
+      doc.text(`: ${patient.ageCategory || "-"}`, 121, 63);
 
-      doc.text("Berat Badan", 108, 63);
-      doc.text(`: ${patient.weight || "-"} kg`, 137, 63);
+      doc.text("Berat Badan", 92, 70);
+      doc.text(`: ${patient.weight || "-"} kg`, 121, 70);
 
-      doc.text("Tinggi Badan", 108, 70);
-      doc.text(`: ${patient.height || "-"} cm`, 137, 70);
-
-      doc.text("Suhu Tubuh", 108, 77);
-      doc.text(`: ${patient.temperature || "-"} °C`, 137, 77);
+      doc.text("Suhu Tubuh", 150, 70);
+      doc.text(`: ${patient.temperature || "-"} °C`, 175, 70);
 
       setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text("RINGKASAN HASIL", 10, 94);
+      doc.text("RINGKASAN HASIL", 10, 88);
 
       const summaryCards = [
-        { x: 10, y: 98, w: 58, h: 24, label: "Total Intake", value: formatMl(result.totalIntake) },
-        { x: 72, y: 98, w: 58, h: 24, label: "Total Output", value: formatMl(result.totalOutput) },
-        { x: 134, y: 98, w: 58, h: 24, label: "IWL Normal", value: formatMl(result.iwlNormal) },
-        { x: 10, y: 126, w: 58, h: 24, label: result.hasFever ? "IWL Demam" : "Status Demam", value: result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam" },
-        { x: 72, y: 126, w: 58, h: 24, label: "Balance Standar", value: formatMl(result.balanceStandard) },
-        { x: 134, y: 126, w: 58, h: 24, label: result.hasFever ? "Balance Terkoreksi" : "Koreksi Demam", value: result.balanceCorrected !== null ? formatMl(result.balanceCorrected) : "Tidak muncul" },
+        { x: 10, y: 92, w: 58, h: 24, label: "Total Intake", value: formatMl(result.totalIntake) },
+        { x: 72, y: 92, w: 58, h: 24, label: "Total Output", value: formatMl(result.totalOutput) },
+        { x: 134, y: 92, w: 58, h: 24, label: "IWL Normal", value: formatMl(result.iwlNormal) },
+        {
+          x: 10,
+          y: 120,
+          w: 58,
+          h: 24,
+          label: result.hasFever ? "IWL Demam" : "Status Demam",
+          value: result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam",
+        },
+        { x: 72, y: 120, w: 58, h: 24, label: "Balance Standar", value: formatMl(result.balanceStandard) },
+        {
+          x: 134,
+          y: 120,
+          w: 58,
+          h: 24,
+          label: result.hasFever ? "Balance Terkoreksi" : "Koreksi Demam",
+          value: result.balanceCorrected !== null ? formatMl(result.balanceCorrected) : "Tidak muncul",
+        },
       ];
 
       summaryCards.forEach((card) => {
@@ -753,24 +732,25 @@ export default function Home() {
       });
 
       setFill(statusColor);
-      doc.roundedRect(10, 156, 190, 20, 5, 5, "F");
+      doc.roundedRect(10, 150, 190, 20, 5, 5, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text(`${result.hasFever ? "STATUS BALANCE TERKOREKSI" : "STATUS BALANCE"}: ${mainStatus.toUpperCase()}`, 105, 164, {
-        align: "center",
-      });
+      doc.text(
+        `${result.hasFever ? "STATUS BALANCE TERKOREKSI" : "STATUS BALANCE"}: ${mainStatus.toUpperCase()}`,
+        105,
+        158,
+        { align: "center" }
+      );
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(getInterpretationText(mainStatus), 105, 170, {
-        align: "center",
-      });
+      doc.text(getInterpretationText(mainStatus), 105, 164, { align: "center" });
 
       setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text("RINCIAN KOMPONEN CAIRAN", 10, 186);
+      doc.text("RINCIAN KOMPONEN CAIRAN", 10, 180);
 
       const intakeRows = fluid.additionalIntakes
         .filter((item) => item.type.trim() || item.value.trim())
@@ -789,13 +769,14 @@ export default function Home() {
         ]);
 
       autoTable(doc, {
-        startY: 190,
+        startY: 184,
         head: [["Kelompok", "Komponen", "Nilai"]],
         body: [
           ["Intake", "Oral", `${toNumber(fluid.oral).toFixed(1)} mL`],
           ["Intake", "Infus", `${toNumber(fluid.infus).toFixed(1)} mL`],
           ["Intake", "Obat Cair", `${toNumber(fluid.obat).toFixed(1)} mL`],
           ["Intake", "Transfusi", `${toNumber(fluid.transfusi).toFixed(1)} mL`],
+          ["Intake", "Air Metabolisme", `${toNumber(fluid.airMetabolisme).toFixed(1)} mL`],
           ...intakeRows,
           ["Output", "Urin", `${toNumber(fluid.urin).toFixed(1)} mL`],
           ["Output", "Muntah", `${toNumber(fluid.muntah).toFixed(1)} mL`],
@@ -921,70 +902,43 @@ export default function Home() {
       doc.text("PENGESAHAN", 10, sectionY);
 
       setFill(lightBlue);
-      doc.roundedRect(10, sectionY + 4, 190, 40, 5, 5, "F");
+      doc.roundedRect(10, sectionY + 5, 190, 42, 5, 5, "F");
       setDraw(border);
-      doc.roundedRect(10, sectionY + 4, 190, 40, 5, 5, "S");
+      doc.roundedRect(10, sectionY + 5, 190, 42, 5, 5, "S");
 
-      const signCenterX = 150;
-      const titleY = sectionY + 16;
-      const nameY = sectionY + 30;
-      const lineY = sectionY + 34;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      setText(primary);
+      doc.text("Padang, " + exportDateDisplay.split(",")[0], 146, sectionY + 15, { align: "center" });
+      doc.text("Petugas Penanggung Jawab", 146, sectionY + 22, { align: "center" });
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      setText(primary);
-      doc.text("Petugas Penanggung Jawab", signCenterX, titleY, {
-        align: "center",
-      });
+      doc.text(officerDisplayName || "-", 146, sectionY + 42, { align: "center" });
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      doc.text(`(${officerDisplayName})`, signCenterX, nameY, {
-        align: "center",
-      });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      setText(slate);
+      doc.text("Dokumen dibuat otomatis oleh FluidaCare.", 10, 288);
 
-      setDraw(primary);
-      doc.setLineWidth(0.4);
-      doc.line(120, lineY, 180, lineY);
-
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        setDraw(border);
-        doc.line(10, pageHeight - 10, 200, pageHeight - 10);
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        setText(slate);
-        doc.text(`Pasien: ${patient.name}`, 10, pageHeight - 5);
-        doc.text(`Halaman ${i} / ${pageCount}`, pageWidth - 10, pageHeight - 5, {
-          align: "right",
-        });
-      }
-
-      const fileName = `Laporan_Balance_Cairan_${safePatientName}_(${exportDateForFile}).pdf`;
-      doc.save(fileName);
+      doc.save(`Balance_Cairan_${safePatientName}_${exportDateForFile}.pdf`);
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan saat membuat PDF.");
+      alert("Export PDF gagal. Pastikan paket jspdf dan jspdf-autotable sudah terpasang.");
     } finally {
       setIsExporting(false);
     }
   }
 
-  if (currentView === "tentang") {
-    return <InfoPage variant="tentang" onBack={backToHome} />;
-  }
-
-  if (currentView === "profil") {
-    return <InfoPage variant="profil" onBack={backToHome} />;
+  if (currentView !== "home") {
+    return <InfoPage variant={currentView} onBack={backToHome} />;
   }
 
   return (
     <main className="min-h-screen bg-slate-100">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
         <section
-          className="relative rounded-[32px] p-8 md:p-10 text-white shadow-xl mb-6"
+          className="relative mb-6 overflow-visible rounded-[32px] p-7 text-white shadow-xl md:p-10"
           style={{
             backgroundImage:
               "linear-gradient(135deg, rgba(29,78,216,0.88) 0%, rgba(14,165,233,0.82) 52%, rgba(103,232,249,0.72) 100%), url('/rsup-m-jamil.jpg')",
@@ -992,87 +946,83 @@ export default function Home() {
             backgroundPosition: "center",
           }}
         >
-          <div className="absolute right-[-60px] top-[-60px] h-56 w-56 rounded-full bg-white/10" />
-          <div className="absolute right-[80px] bottom-[-80px] h-48 w-48 rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute right-[-60px] top-[-60px] h-56 w-56 rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute bottom-[-80px] right-[80px] h-48 w-48 rounded-full bg-white/10" />
 
-          <div className="relative z-10 flex flex-col gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h1 className="text-4xl md:text-5xl font-black tracking-tight">
-                  KALBACA WEB
-                </h1>
-                <p className="mt-4 max-w-4xl text-sm md:text-lg leading-7 text-white/95">
-                  Kalkulator Balance Cairan berbasis website untuk membantu
-                  pencatatan intake-output yang lebih terstandar, menghitung
-                  balance cairan lebih cepat, serta menghitung IWL normal dan
-                  koreksi demam sesuai rumus dewasa maupun anak tanpa BSA.
-                </p>
-              </div>
+          <div className="relative z-10 min-h-[170px] pr-0 md:pr-48">
+            <h1 className="text-4xl font-black tracking-tight md:text-5xl">FluidaCare</h1>
+            <p className="mt-4 max-w-4xl text-sm leading-7 text-white/95 md:text-lg">
+              Kalkulator balance cairan berbasis website untuk membantu pencatatan intake-output yang
+              lebih terstandar, menghitung balance cairan lebih cepat, serta membantu koreksi demam.
+            </p>
 
-              <div className="absolute right-5 top-5 z-40 md:right-8 md:top-8">
-                <button
-                  type="button"
-                  onClick={() => setIsInfoMenuOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-3 rounded-2xl border border-white/40 bg-white/20 px-4 py-3 text-sm font-bold text-white shadow-lg backdrop-blur-md transition hover:bg-white/30"
-                  aria-label="Buka menu informasi"
-                >
-                  <span className="flex flex-col gap-1">
-                    <span className="block h-0.5 w-5 rounded-full bg-white" />
-                    <span className="block h-0.5 w-5 rounded-full bg-white" />
-                    <span className="block h-0.5 w-5 rounded-full bg-white" />
-                  </span>
-                  <span>Menu</span>
-                </button>
-
-                {isInfoMenuOpen && (
-                  <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-[320px] max-w-[calc(100vw-2rem)] rounded-[28px] border border-slate-200 bg-white p-3 text-slate-800 shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
-                    <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-                      Menu Navigasi
-                    </p>
-
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => openMenuPage("tentang")}
-                        className="flex w-full items-start justify-between rounded-2xl border border-transparent bg-slate-50 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
-                      >
-                        <span className="pr-4">
-                          <span className="block text-base font-extrabold text-slate-900">Tentang Aplikasi</span>
-                          <span className="mt-1 block text-sm leading-6 text-slate-500">
-                            Buka halaman informasi aplikasi.
-                          </span>
-                        </span>
-                        <span className="mt-1 text-2xl text-slate-400">›</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => openMenuPage("profil")}
-                        className="flex w-full items-start justify-between rounded-2xl border border-transparent bg-slate-50 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
-                      >
-                        <span className="pr-4">
-                          <span className="block text-base font-extrabold text-slate-900">Profil Pengembangan</span>
-                          <span className="mt-1 block text-sm leading-6 text-slate-500">
-                            Buka halaman profil pengembangan.
-                          </span>
-                        </span>
-                        <span className="mt-1 text-2xl text-slate-400">›</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="mt-6 inline-flex items-center rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm font-semibold backdrop-blur-sm">
+              RSUP Dr. M. Djamil Padang
             </div>
+          </div>
+
+          <div className="absolute right-5 top-5 z-50 md:right-8 md:top-8">
+            <button
+              type="button"
+              onClick={() => setIsInfoMenuOpen((prev) => !prev)}
+              className="inline-flex items-center gap-3 rounded-2xl border border-white/40 bg-white/20 px-4 py-3 text-sm font-bold text-white shadow-lg backdrop-blur-md transition hover:bg-white/30"
+              aria-label="Buka menu informasi"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="block h-0.5 w-5 rounded-full bg-white" />
+                <span className="block h-0.5 w-5 rounded-full bg-white" />
+                <span className="block h-0.5 w-5 rounded-full bg-white" />
+              </span>
+              <span>Menu</span>
+            </button>
+
+            {isInfoMenuOpen && (
+              <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-[330px] max-w-[calc(100vw-2rem)] rounded-[28px] border border-slate-200 bg-white p-3 text-slate-800 shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
+                <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                  Menu Navigasi
+                </p>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => openMenuPage("tentang")}
+                    className="flex w-full items-start justify-between rounded-2xl border border-transparent bg-slate-50 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    <span className="pr-4">
+                      <span className="block text-base font-extrabold text-slate-900">Tentang Aplikasi</span>
+                      <span className="mt-1 block text-sm leading-6 text-slate-500">
+                        Buka halaman informasi aplikasi.
+                      </span>
+                    </span>
+                    <span className="mt-1 text-2xl text-slate-400">›</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openMenuPage("profil")}
+                    className="flex w-full items-start justify-between rounded-2xl border border-transparent bg-slate-50 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    <span className="pr-4">
+                      <span className="block text-base font-extrabold text-slate-900">Profil Pengembangan</span>
+                      <span className="mt-1 block text-sm leading-6 text-slate-500">
+                        Buka halaman profil pengembangan.
+                      </span>
+                    </span>
+                    <span className="mt-1 text-2xl text-slate-400">›</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
         <div className="space-y-6">
-          <section className="rounded-[28px] bg-white p-6 shadow-sm border border-white">
+          <section className="rounded-[28px] border border-white bg-white p-6 shadow-sm">
             <div className="mb-5">
               <h2 className="text-2xl font-bold text-slate-800">Nama Petugas</h2>
-              <p className="mt-2 text-slate-600 leading-7">
-                Isi nama petugas penanggung jawab terlebih dahulu. Nama ini akan
-                digunakan pada bagian pengesahan di hasil PDF.
+              <p className="mt-2 leading-7 text-slate-600">
+                Isi nama petugas penanggung jawab terlebih dahulu. Nama ini akan digunakan pada bagian
+                pengesahan di hasil PDF.
               </p>
             </div>
 
@@ -1090,40 +1040,41 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="rounded-[28px] bg-white p-6 shadow-sm border border-white">
+          <section className="rounded-[28px] border border-white bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">Data Pasien</h2>
-                <p className="mt-2 text-slate-600 leading-7">
-                  Isi data dasar pasien untuk menyesuaikan perhitungan IWL dan
-                  balance cairan terkoreksi. Semua field wajib diisi sebelum
-                  bagian pencatatan cairan bisa digunakan. Tinggi badan bersifat opsional karena rumus anak tidak lagi menggunakan BSA.
+                <p className="mt-2 leading-7 text-slate-600">
+                  Isi data dasar pasien untuk menyesuaikan perhitungan IWL dan balance cairan terkoreksi.
+                  Semua field wajib diisi sebelum bagian pencatatan cairan bisa digunakan.
                 </p>
               </div>
-              <div className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700">
+              <span className="shrink-0 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700">
                 Langkah 1
-              </div>
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField label="Nama Pasien" error={patientErrors.name}>
-                <input
-                  type="text"
-                  placeholder="Masukkan nama pasien"
-                  value={patient.name}
-                  onChange={(e) => setPatientField("name", e.target.value)}
-                  className={inputClass(!!patientErrors.name)}
-                  maxLength={100}
-                />
-              </FormField>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="xl:col-span-2">
+                <FormField label="Nama Pasien" error={patientErrors.name}>
+                  <input
+                    type="text"
+                    placeholder="Masukkan nama pasien"
+                    value={patient.name}
+                    onChange={(e) => setPatientField("name", e.target.value)}
+                    className={inputClass(!!patientErrors.name)}
+                    maxLength={100}
+                  />
+                </FormField>
+              </div>
 
               <FormField label="Usia (tahun)" error={patientErrors.age}>
                 <input
                   type="number"
                   min={0}
                   max={130}
-                  step={1}
-                  placeholder="Contoh: 25"
+                  step={0.1}
+                  placeholder="Contoh: 45"
                   value={patient.age}
                   onChange={(e) => setPatientField("age", e.target.value)}
                   className={inputClass(!!patientErrors.age)}
@@ -1133,12 +1084,10 @@ export default function Home() {
               <FormField label="Kategori Usia" error={patientErrors.ageCategory}>
                 <select
                   value={patient.ageCategory}
-                  onChange={(e) =>
-                    setPatientField("ageCategory", e.target.value as AgeCategory)
-                  }
+                  onChange={(e) => setPatientField("ageCategory", e.target.value as AgeCategory)}
                   className={inputClass(!!patientErrors.ageCategory)}
                 >
-                  <option value="">Pilih kategori usia</option>
+                  <option value="">Pilih kategori</option>
                   <option value="dewasa (>18 Thn)">Dewasa (&gt;18 Thn)</option>
                   <option value="anak (<18 Thn)">Anak (&lt;18 Thn)</option>
                 </select>
@@ -1147,7 +1096,7 @@ export default function Home() {
               <FormField label="Berat Badan (kg)" error={patientErrors.weight}>
                 <input
                   type="number"
-                  min={0.1}
+                  min={0}
                   max={300}
                   step={0.1}
                   placeholder="Contoh: 60"
@@ -1157,26 +1106,13 @@ export default function Home() {
                 />
               </FormField>
 
-              <FormField label="Tinggi Badan (cm) - Opsional" error={patientErrors.height}>
-                <input
-                  type="number"
-                  min={30}
-                  max={250}
-                  step={0.1}
-                  placeholder="Contoh: 170"
-                  value={patient.height}
-                  onChange={(e) => setPatientField("height", e.target.value)}
-                  className={inputClass(!!patientErrors.height)}
-                />
-              </FormField>
-
               <FormField label="Suhu Tubuh (°C)" error={patientErrors.temperature}>
                 <input
                   type="number"
                   min={30}
                   max={45}
                   step={0.1}
-                  placeholder="Contoh: 36.8 atau 39"
+                  placeholder="Contoh: 37.8"
                   value={patient.temperature}
                   onChange={(e) => setPatientField("temperature", e.target.value)}
                   className={inputClass(!!patientErrors.temperature)}
@@ -1184,215 +1120,127 @@ export default function Home() {
               </FormField>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
               {saveMessage}
             </div>
           </section>
 
-          <section className="rounded-[28px] bg-white p-6 shadow-sm border border-white">
+          <section className="rounded-[28px] border border-white bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-slate-800">
-                  Pencatatan Intake dan Output
-                </h2>
-                <p className="mt-2 text-slate-600 leading-7">
-                  Format dibuat lebih rapi untuk mendukung pencatatan
-                  terstandar dan mengurangi kesalahan input. Semua kolom angka
-                  menggunakan satuan mL.
+                <h2 className="text-2xl font-bold text-slate-800">Pencatatan Cairan</h2>
+                <p className="mt-2 leading-7 text-slate-600">
+                  Catat seluruh intake dan output pasien. Kolom tambahan dapat dipakai sampai 5 jenis cairan
+                  tambahan pada masing-masing kelompok.
                 </p>
               </div>
-              <div className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700">
+              <span className="shrink-0 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700">
                 Langkah 2
-              </div>
+              </span>
             </div>
 
             {!formReady && (
-              <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                Input cairan dikunci sampai nama petugas dan semua data pasien lengkap dan valid.
+              <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">
+                Lengkapi nama petugas dan data pasien terlebih dahulu agar bagian pencatatan cairan bisa
+                digunakan.
               </div>
             )}
 
-            <div
-              className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 ${
-                !formReady ? "opacity-60 pointer-events-none" : ""
-              }`}
-            >
-              <FluidGroup title="Intake">
+            <div className={`grid grid-cols-1 gap-5 lg:grid-cols-2 ${!formReady ? "pointer-events-none opacity-50" : ""}`}>
+              <FluidGroup title="Intake" description="Masukkan seluruh cairan masuk pasien.">
                 <FieldNumber label="Oral" value={fluid.oral} onChange={(v) => setFluidField("oral", v)} />
                 <FieldNumber label="Infus" value={fluid.infus} onChange={(v) => setFluidField("infus", v)} />
                 <FieldNumber label="Obat Cair" value={fluid.obat} onChange={(v) => setFluidField("obat", v)} />
                 <FieldNumber label="Transfusi" value={fluid.transfusi} onChange={(v) => setFluidField("transfusi", v)} />
-              </FluidGroup>
+                <FieldNumber
+                  label="Air Metabolisme"
+                  value={fluid.airMetabolisme}
+                  onChange={(v) => setFluidField("airMetabolisme", v)}
+                />
 
-              <FluidGroup title="Intake Lainnya">
-                <AdditionalFluidSection
+                <AdditionalItems
+                  title="Jenis Intake Lainnya"
+                  group="additionalIntakes"
                   items={fluid.additionalIntakes}
-                  onAdd={() => addAdditionalItem("additionalIntakes")}
-                  onRemove={(id) => removeAdditionalItem("additionalIntakes", id)}
-                  onTypeChange={(id, value) =>
-                    updateAdditionalItem("additionalIntakes", id, "type", value)
-                  }
-                  onValueChange={(id, value) =>
-                    updateAdditionalItem("additionalIntakes", id, "value", value)
-                  }
-                  addLabel="+ Tambah Intake Lainnya"
+                  onChange={updateAdditionalItem}
+                  onAdd={addAdditionalItem}
+                  onRemove={removeAdditionalItem}
                 />
               </FluidGroup>
 
-              <FluidGroup title="Output">
+              <FluidGroup title="Output" description="Masukkan seluruh cairan keluar pasien.">
                 <FieldNumber label="Urin" value={fluid.urin} onChange={(v) => setFluidField("urin", v)} />
                 <FieldNumber label="Muntah" value={fluid.muntah} onChange={(v) => setFluidField("muntah", v)} />
                 <FieldNumber label="Drainase" value={fluid.drainase} onChange={(v) => setFluidField("drainase", v)} />
                 <FieldNumber label="Feses Cair" value={fluid.feses} onChange={(v) => setFluidField("feses", v)} />
-              </FluidGroup>
 
-              <FluidGroup title="Output Lainnya">
-                <AdditionalFluidSection
+                <AdditionalItems
+                  title="Jenis Output Lainnya"
+                  group="additionalOutputs"
                   items={fluid.additionalOutputs}
-                  onAdd={() => addAdditionalItem("additionalOutputs")}
-                  onRemove={(id) => removeAdditionalItem("additionalOutputs", id)}
-                  onTypeChange={(id, value) =>
-                    updateAdditionalItem("additionalOutputs", id, "type", value)
-                  }
-                  onValueChange={(id, value) =>
-                    updateAdditionalItem("additionalOutputs", id, "value", value)
-                  }
-                  addLabel="+ Tambah Output Lainnya"
+                  onChange={updateAdditionalItem}
+                  onAdd={addAdditionalItem}
+                  onRemove={removeAdditionalItem}
                 />
               </FluidGroup>
             </div>
 
-            <div className={`mt-5 ${!formReady ? "opacity-60 pointer-events-none" : ""}`}>
-              <FormField label="Catatan Tambahan / Keterangan Tambahan">
-                <textarea
-                  placeholder="Isi jika ada catatan tambahan dari petugas. Jika kosong, tidak akan ditampilkan di PDF."
-                  value={fluid.additionalNotes}
-                  onChange={(e) => setFluidField("additionalNotes", e.target.value)}
-                  rows={4}
-                  className={`${inputClass(false)} resize-y min-h-[110px]`}
-                  maxLength={1000}
-                />
-              </FormField>
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={calculate}
-                disabled={!formReady}
-                className="rounded-2xl bg-blue-600 px-6 py-3 text-white font-bold shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                Hitung Balance Cairan
-              </button>
-
-              <button
-                type="button"
-                onClick={exportPDF}
-                disabled={!result || !formReady || isExporting}
-                className="rounded-2xl bg-emerald-600 px-6 py-3 text-white font-bold shadow-md transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isExporting ? "Sedang Export..." : "Export PDF"}
-              </button>
-
-              <button
-                type="button"
-                onClick={resetAll}
-                className="rounded-2xl border border-slate-300 bg-white px-6 py-3 text-slate-700 font-bold transition hover:bg-slate-50"
-              >
-                Reset
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-[28px] bg-white p-6 shadow-sm border border-white">
-            <div className="mb-5">
-              <h2 className="text-2xl font-bold text-slate-800">
-                Dashboard Hasil
-              </h2>
-              <p className="mt-2 text-slate-600 leading-7">
-                Menampilkan hasil utama untuk mempercepat interpretasi dan validasi perhitungan.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              <ResultCard label="Total Intake" value={result ? formatMl(result.totalIntake) : "0 mL"} />
-              <ResultCard label="Total Output" value={result ? formatMl(result.totalOutput) : "0 mL"} />
-              <ResultCard label="IWL Normal" value={result ? formatMl(result.iwlNormal) : "0 mL"} />
-              <ResultCard label="IWL Demam / Koreksi" value={result?.iwlFever !== null && result?.iwlFever !== undefined ? formatMl(result.iwlFever) : "Tidak muncul"} />
-              <ResultCard label="Balance Standar" value={result ? formatMl(result.balanceStandard) : "0 mL"} />
-              <ResultCard label="Balance Terkoreksi" value={result?.balanceCorrected !== null && result?.balanceCorrected !== undefined ? formatMl(result.balanceCorrected) : "Tidak muncul"} />
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-blue-200 bg-blue-50 p-4 leading-7 text-slate-700">
-              {!formReady ? (
-                <p>Lengkapi nama petugas dan data pasien terlebih dahulu agar hasil dapat muncul.</p>
-              ) : !result ? (
-                <p>Status akan muncul setelah perhitungan.</p>
-              ) : (
-                <div>
-                  <p className="font-bold text-slate-800">
-                    {patient.name} - {result.methodLabel}
-                  </p>
-                  <p className="mt-1">
-                    Status Balance Standar:{" "}
-                    <span className={`font-bold ${getStatusClass(result.statusStandard)}`}>
-                      {result.statusStandard}
-                    </span>
-                  </p>
-                  {result.hasFever && result.statusCorrected ? (
-                    <p>
-                      Status Balance Terkoreksi:{" "}
-                      <span className={`font-bold ${getStatusClass(result.statusCorrected)}`}>
-                        {result.statusCorrected}
-                      </span>
-                    </p>
-                  ) : (
-                    <p className="text-slate-600">
-                      Koreksi demam tidak ditampilkan karena suhu ≤ 37°C.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-[28px] bg-white p-6 shadow-sm border border-white">
-            <div className="mb-4">
-              <h2 className="text-2xl font-bold text-slate-800">
-                Rumus yang Digunakan
-              </h2>
-              <p className="mt-2 text-slate-600 leading-7">
-                Bagian ini berguna untuk memverifikasi hasil, memvalidasi perhitungan,
-                dan memastikan rumus yang digunakan tampil transparan.
-              </p>
-            </div>
-
-            {!result ? (
-              <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-500">
-                Rumus dan hasil perhitungan akan muncul di sini setelah tombol hitung dijalankan.
-              </div>
-            ) : (
-              <FormulaPanel
-                patient={patient}
-                fluid={fluid}
-                result={result}
-                weightNum={weightNum}
-                temperatureNum={temperatureNum}
+            <div className={`mt-5 ${!formReady ? "pointer-events-none opacity-50" : ""}`}>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Catatan Tambahan - Opsional</label>
+              <textarea
+                value={fluid.additionalNotes}
+                onChange={(e) => setFluidField("additionalNotes", e.target.value)}
+                placeholder="Masukkan catatan klinis tambahan jika diperlukan"
+                rows={4}
+                className="w-full resize-y rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               />
-            )}
-
-            <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-800 leading-8">
-              Catatan: balance standar dihitung dari intake dikurangi output terukur dan IWL normal.
-              Balance terkoreksi hanya ditampilkan jika suhu pasien &gt;37°C.
             </div>
           </section>
 
+          <section className="rounded-[28px] border border-white bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Hitung dan Export</h2>
+                <p className="mt-2 leading-7 text-slate-600">
+                  Balance terkoreksi hanya ditampilkan jika suhu pasien &gt; 37°C.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={calculate}
+                  disabled={!formReady}
+                  className="rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Hitung Balance
+                </button>
+                <button
+                  type="button"
+                  onClick={exportPDF}
+                  disabled={!result || isExporting}
+                  className="rounded-2xl bg-slate-900 px-6 py-3 font-bold text-white shadow-lg shadow-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isExporting ? "Mengekspor..." : "Export PDF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetAll}
+                  className="rounded-2xl border border-slate-300 bg-white px-6 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
 
-
-
+            {result && (
+              <div className="mt-6">
+                <ResultPanel result={result} />
+                <FormulaPanel result={result} fluid={fluid} patient={patient} />
+              </div>
+            )}
+          </section>
         </div>
       </div>
-
     </main>
   );
 }
@@ -1427,15 +1275,13 @@ function InfoPage({
           </button>
 
           <div className="pt-12 md:pt-4">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/80">
-              KALBACA WEB
-            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/80">FluidaCare</p>
             <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
               {isAbout ? "Tentang Aplikasi" : "Profil Pengembangan"}
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-white/95 md:text-lg">
               {isAbout
-                ? "Informasi tujuan, fungsi, dan batasan penggunaan aplikasi KalBaCa Web."
+                ? "Informasi tujuan, fungsi, dan batasan penggunaan aplikasi FluidaCare."
                 : "Informasi pengembang, instansi, dan identitas pengembangan aplikasi."}
             </p>
           </div>
@@ -1444,30 +1290,28 @@ function InfoPage({
         <section className="mt-6 rounded-[28px] border border-white bg-white p-5 shadow-sm md:p-7">
           {isAbout ? (
             <div className="space-y-5">
-              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8 md:p-6">
-                <h2 className="text-2xl font-black text-slate-900">KalBaCa Web</h2>
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 leading-8 text-slate-700 md:p-6">
+                <h2 className="text-2xl font-black text-slate-900">FluidaCare</h2>
                 <p className="mt-4">
-                  KalBaCa Web merupakan aplikasi kalkulator balance cairan yang
-                  dikembangkan secara mandiri untuk membantu tenaga kesehatan melakukan
-                  pencatatan intake-output dan perhitungan keseimbangan cairan pasien
-                  secara cepat, praktis, dan terstandar, khususnya di Instalasi Gawat
-                  Darurat (IGD).
+                  FluidaCare merupakan aplikasi kalkulator balance cairan yang dikembangkan secara mandiri
+                  untuk membantu tenaga kesehatan melakukan pencatatan intake-output dan perhitungan
+                  keseimbangan cairan pasien secara cepat, praktis, dan terstandar, khususnya di Instalasi
+                  Gawat Darurat (IGD).
                 </p>
                 <p className="mt-3">
-                  Aplikasi ini dibuat sebagai bentuk inovasi pelayanan keperawatan dan
-                  disusun berdasarkan kebutuhan penggunaan di lapangan serta referensi
-                  ilmiah terkait manajemen cairan pasien. Referensi penelitian terdahulu
-                  digunakan sebagai landasan akademik, bukan sebagai penyalinan kode,
-                  desain, atau sistem.
+                  Aplikasi ini dibuat sebagai bentuk inovasi pelayanan keperawatan dan disusun berdasarkan
+                  kebutuhan penggunaan di lapangan serta referensi ilmiah terkait manajemen cairan pasien.
+                  Referensi penelitian terdahulu digunakan sebagai landasan akademik, bukan sebagai
+                  penyalinan kode, desain, atau sistem.
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900 leading-8 md:p-6">
+              <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 leading-8 text-amber-900 md:p-6">
                 <h3 className="text-lg font-black">Keterangan Penggunaan</h3>
                 <p className="mt-3">
-                  Aplikasi ini merupakan alat bantu perhitungan dan tidak menggantikan
-                  penilaian klinis tenaga kesehatan. Hasil perhitungan tetap perlu
-                  disesuaikan dengan kondisi pasien dan kebijakan pelayanan setempat.
+                  Aplikasi ini merupakan alat bantu perhitungan dan tidak menggantikan penilaian klinis
+                  tenaga kesehatan. Hasil perhitungan tetap perlu disesuaikan dengan kondisi pasien dan
+                  kebijakan pelayanan setempat.
                 </p>
               </div>
             </div>
@@ -1478,15 +1322,18 @@ function InfoPage({
                 <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <ProfileInfo label="Pengembang" value="Ramona Hotnida Sari Nasution" />
                   <ProfileInfo label="Instansi" value="RSUP Dr. M. Djamil Padang" />
-                  <ProfileInfo label="Tahun" value="2026" />
-                  <ProfileInfo label="Jenis Aplikasi" value="Web App Kalkulator Balance Cairan" />
+                  <ProfileInfo label="Tahun Pengembangan" value="2026" />
+                  <ProfileInfo label="Nama Aplikasi" value="FluidaCare" />
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-slate-700 leading-8 md:p-6">
-                Profil ini dipisahkan dari halaman utama agar halaman perhitungan tetap
-                bersih, tidak memanjang ke bawah, dan informasi pengembang tetap mudah
-                diakses melalui menu di pojok kanan atas.
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 leading-8 text-slate-700 md:p-6">
+                <h3 className="text-lg font-black text-slate-900">Ruang Lingkup</h3>
+                <p className="mt-3">
+                  Aplikasi ini difokuskan untuk membantu pencatatan intake-output, perhitungan IWL normal,
+                  koreksi demam, serta interpretasi awal status balance cairan sebagai alat bantu kerja di
+                  pelayanan.
+                </p>
               </div>
             </div>
           )}
@@ -1499,17 +1346,15 @@ function InfoPage({
 function ProfileInfo({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white bg-white p-4 shadow-sm">
-      <p className="text-sm font-semibold text-slate-500">{label}</p>
-      <p className="mt-2 text-base font-black text-slate-900">{value}</p>
+      <p className="text-sm font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-slate-900">{value}</p>
     </div>
   );
 }
 
-function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:ring-4 ${
-    hasError
-      ? "border-rose-400 focus:border-rose-400 focus:ring-rose-100"
-      : "border-slate-300 focus:border-blue-400 focus:ring-blue-100"
+function inputClass(hasError = false) {
+  return `w-full rounded-2xl border bg-white px-4 py-3 text-slate-800 outline-none transition focus:ring-4 ${
+    hasError ? "border-rose-400 focus:border-rose-500 focus:ring-rose-100" : "border-slate-300 focus:border-blue-500 focus:ring-blue-100"
   }`;
 }
 
@@ -1523,28 +1368,11 @@ function FormField({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-700">{label}</span>
       {children}
-      <div className="mt-2 min-h-[20px] text-sm text-rose-600">{error || ""}</div>
-    </div>
-  );
-}
-
-function FluidGroup({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 min-h-[360px]">
-      <h3 className="text-lg font-bold text-blue-800 min-h-[56px]">{title}</h3>
-      <div className="mt-4 space-y-4">{children}</div>
-    </div>
+      {error && <span className="mt-2 block text-sm font-semibold text-rose-600">{error}</span>}
+    </label>
   );
 }
 
@@ -1557,179 +1385,253 @@ function FieldNumber({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const handleChange = (raw: string) => {
-    const normalized = raw.replace(/,/g, ".");
-
-    if (normalized === "") {
-      onChange("");
-      return;
-    }
-
-    if (/^\d*\.?\d*$/.test(normalized)) {
-      onChange(normalized);
-    }
-  };
-
   return (
-    <div>
-      <label className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-700 min-h-[20px]">
-        <span>{label}</span>
-        <span className="text-xs font-medium text-slate-500">mL</span>
-      </label>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder="Contoh: 500"
-        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-      />
-    </div>
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-700">{label}</span>
+      <div className="relative">
+        <input
+          type="number"
+          min={0}
+          step={0.1}
+          placeholder="0"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-14 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+          mL
+        </span>
+      </div>
+    </label>
   );
 }
 
-function FieldText({
-  label,
-  value,
-  onChange,
-  placeholder,
+function FluidGroup({
+  title,
+  description,
+  children,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
+  title: string;
+  description: string;
+  children: ReactNode;
 }) {
   return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700 min-h-[20px]">
-        {label}
-      </label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-      />
+    <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+      <div className="mb-5">
+        <h3 className="text-xl font-black text-slate-900">{title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+      </div>
+      <div className="space-y-4">{children}</div>
     </div>
   );
 }
 
-function ResultCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 min-h-[128px] flex flex-col justify-between">
-      <p className="text-sm font-semibold text-slate-500 text-center">{label}</p>
-      <h3 className="mt-3 text-2xl md:text-3xl font-black text-slate-900 text-center">
-        {value}
-      </h3>
-    </div>
-  );
-}
-
-function AdditionalFluidSection({
+function AdditionalItems({
+  title,
+  group,
   items,
+  onChange,
   onAdd,
   onRemove,
-  onTypeChange,
-  onValueChange,
-  addLabel,
 }: {
+  title: string;
+  group: "additionalIntakes" | "additionalOutputs";
   items: AdditionalFluidItem[];
-  onAdd: () => void;
-  onRemove: (id: string) => void;
-  onTypeChange: (id: string, value: string) => void;
-  onValueChange: (id: string, value: string) => void;
-  addLabel: string;
+  onChange: (
+    group: "additionalIntakes" | "additionalOutputs",
+    id: string,
+    field: keyof Omit<AdditionalFluidItem, "id">,
+    value: string
+  ) => void;
+  onAdd: (group: "additionalIntakes" | "additionalOutputs") => void;
+  onRemove: (group: "additionalIntakes" | "additionalOutputs", id: string) => void;
 }) {
+  const canAdd = items.length < MAX_ADDITIONAL_ITEMS;
+
   return (
-    <div className="space-y-4">
-      {items.map((item, index) => (
-        <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-bold text-slate-700">Item {index + 1}</p>
+    <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h4 className="font-black text-slate-800">{title}</h4>
+          <p className="mt-1 text-sm text-slate-500">Maksimal {MAX_ADDITIONAL_ITEMS} baris tambahan.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onAdd(group)}
+          disabled={!canAdd}
+          className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          + Tambah
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div key={item.id} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_160px_auto]">
+            <input
+              type="text"
+              placeholder={`Jenis lainnya ${index + 1}`}
+              value={item.type}
+              onChange={(e) => onChange(group, item.id, "type", e.target.value)}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            />
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                placeholder="0"
+                value={item.value}
+                onChange={(e) => onChange(group, item.id, "value", e.target.value)}
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              />
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+                mL
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => onRemove(item.id)}
-              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100"
+              onClick={() => onRemove(group, item.id)}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
             >
               Hapus
             </button>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          <div className="space-y-3">
-            <FieldText
-              label="Jenis"
-              value={item.type}
-              onChange={(value) => onTypeChange(item.id, value)}
-              placeholder="Contoh: Nutrisi Enteral / Aspirasi Lambung"
-            />
-            <FieldNumber
-              label="Nilai"
-              value={item.value}
-              onChange={(value) => onValueChange(item.id, value)}
-            />
-          </div>
-        </div>
-      ))}
+function ResultPanel({ result }: { result: CalculationResult }) {
+  const mainStatus = result.statusCorrected ?? result.statusStandard;
 
-      <button
-        type="button"
-        onClick={onAdd}
-        disabled={items.length >= MAX_ADDITIONAL_ITEMS}
-        className="w-full rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-      >
-        {items.length >= MAX_ADDITIONAL_ITEMS
-          ? `Maksimal ${MAX_ADDITIONAL_ITEMS} item`
-          : addLabel}
-      </button>
+  return (
+    <div className="rounded-[28px] border border-blue-100 bg-blue-50 p-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <ResultCard label="Total Intake" value={formatMl(result.totalIntake)} />
+        <ResultCard label="Total Output" value={formatMl(result.totalOutput)} />
+        <ResultCard label="IWL Normal" value={formatMl(result.iwlNormal)} />
+        <ResultCard
+          label={result.hasFever ? "IWL Demam" : "Status Demam"}
+          value={result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam"}
+        />
+        <ResultCard label="Balance Standar" value={formatMl(result.balanceStandard)} status={result.statusStandard} />
+        <ResultCard
+          label={result.hasFever ? "Balance Terkoreksi" : "Koreksi Demam"}
+          value={result.balanceCorrected !== null ? formatMl(result.balanceCorrected) : "Tidak muncul"}
+          status={result.statusCorrected}
+        />
+      </div>
+
+      <div className="mt-5 rounded-3xl bg-white p-5 text-center">
+        <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">
+          Status Balance Utama
+        </p>
+        <p className={`mt-2 text-3xl font-black ${getStatusClass(mainStatus)}`}>{mainStatus}</p>
+        <p className="mt-2 text-slate-600">{getInterpretationText(mainStatus)}</p>
+      </div>
+    </div>
+  );
+}
+
+function ResultCard({
+  label,
+  value,
+  status,
+}: {
+  label: string;
+  value: string;
+  status?: BalanceStatus | null;
+}) {
+  return (
+    <div className="rounded-3xl border border-white bg-white p-5 shadow-sm">
+      <p className="text-sm font-bold text-slate-500">{label}</p>
+      <p className={`mt-2 text-2xl font-black ${status ? getStatusClass(status) : "text-slate-900"}`}>
+        {value}
+      </p>
+      {status && <p className={`mt-1 text-sm font-bold ${getStatusClass(status)}`}>{status}</p>}
     </div>
   );
 }
 
 function FormulaPanel({
-  patient,
-  fluid,
   result,
-  weightNum,
-  temperatureNum,
+  fluid,
+  patient,
 }: {
-  patient: PatientForm;
-  fluid: FluidForm;
   result: CalculationResult;
-  weightNum: number;
-  temperatureNum: number;
+  fluid: FluidForm;
+  patient: PatientForm;
 }) {
-  const totalIntake =
-    toNumber(fluid.oral) +
-    toNumber(fluid.infus) +
-    toNumber(fluid.obat) +
-    toNumber(fluid.transfusi) +
-    sumAdditionalItems(fluid.additionalIntakes);
-
-  const totalOutput =
-    toNumber(fluid.urin) +
-    toNumber(fluid.muntah) +
-    toNumber(fluid.drainase) +
-    toNumber(fluid.feses) +
-    sumAdditionalItems(fluid.additionalOutputs);
-
   const ageNum = toNumber(patient.age);
-  const baseIwl = result.iwlNormal;
+  const weightNum = toNumber(patient.weight);
+  const temperatureNum = toNumber(patient.temperature);
 
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-700 leading-8">
-      <div className="space-y-6">
+    <div className="mt-5 rounded-[28px] border border-slate-200 bg-white p-5">
+      <h3 className="text-xl font-black text-slate-900">Rumus Perhitungan</h3>
+
+      <div className="mt-4 space-y-4 leading-8 text-slate-700">
         <div>
-          <h3 className="font-bold text-slate-800 text-xl">Balance Standar</h3>
+          <h4 className="font-bold text-slate-800">Total Intake</h4>
           <p>
-            Intake - (Output + IWL normal) = {totalIntake.toFixed(1)} - ({totalOutput.toFixed(1)} + {result.iwlNormal.toFixed(1)}) ={" "}
+            Oral + Infus + Obat Cair + Transfusi + Air Metabolisme + Intake Lainnya ={" "}
+            <span className="font-bold">{result.totalIntake.toFixed(1)} mL</span>
+          </p>
+        </div>
+
+        <div>
+          <h4 className="font-bold text-slate-800">Total Output</h4>
+          <p>
+            Urin + Muntah + Drainase + Feses Cair + Output Lainnya ={" "}
+            <span className="font-bold">{result.totalOutput.toFixed(1)} mL</span>
+          </p>
+        </div>
+
+        <div>
+          <h4 className="font-bold text-slate-800">IWL Normal</h4>
+          {patient.ageCategory === "dewasa (>18 Thn)" ? (
+            <p>
+              IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
+              <span className="font-bold">{result.iwlNormal.toFixed(1)} mL/hari</span>
+            </p>
+          ) : (
+            <p>
+              IWL normal anak = (30 - usia) × BB = (30 - {ageNum.toFixed(1)}) ×{" "}
+              {weightNum.toFixed(1)} ={" "}
+              <span className="font-bold">{result.iwlNormal.toFixed(1)} mL/hari</span>
+            </p>
+          )}
+        </div>
+
+        {result.hasFever && result.iwlFever !== null ? (
+          <div>
+            <h4 className="font-bold text-slate-800">IWL Demam/Koreksi</h4>
+            <p>
+              IWL normal + 200 × (Suhu - 37) = {result.iwlNormal.toFixed(1)} + 200 × (
+              {temperatureNum.toFixed(1)} - 37) ={" "}
+              <span className="font-bold">{result.iwlFever.toFixed(1)} mL/hari</span>
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+            Tidak ada koreksi demam karena suhu pasien ≤ 37°C.
+          </div>
+        )}
+
+        <div>
+          <h4 className="font-bold text-slate-800">Balance Standar</h4>
+          <p>
+            Intake - (Output + IWL normal) = {result.totalIntake.toFixed(1)} - (
+            {result.totalOutput.toFixed(1)} + {result.iwlNormal.toFixed(1)}) ={" "}
             <span className="font-bold">{result.balanceStandard.toFixed(1)} mL</span>
           </p>
         </div>
 
         {result.hasFever && result.iwlFever !== null && result.balanceCorrected !== null && (
           <div>
-            <h3 className="font-bold text-slate-800 text-xl">Balance Terkoreksi</h3>
+            <h4 className="font-bold text-slate-800">Balance Terkoreksi</h4>
             <p>
               Intake - (Output + IWL demam) = {result.totalIntake.toFixed(1)} - (
               {result.totalOutput.toFixed(1)} + {result.iwlFever.toFixed(1)}) ={" "}
@@ -1738,30 +1640,20 @@ function FormulaPanel({
           </div>
         )}
 
-        <div>
-          <h3 className="font-bold text-slate-800 text-xl">Perhitungan IWL</h3>
-
-          {patient.ageCategory === "dewasa (>18 Thn)" ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="font-bold text-slate-800">{result.methodLabel}</p>
+          <p>
+            Status Balance Standar:{" "}
+            <span className={`font-bold ${getStatusClass(result.statusStandard)}`}>
+              {result.statusStandard}
+            </span>
+          </p>
+          {result.statusCorrected && (
             <p>
-              IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
-              <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
-            </p>
-          ) : (
-            <p>
-              IWL normal anak = (30 - usia) × BB = (30 - {ageNum.toFixed(1)}) × {weightNum.toFixed(1)} ={" "}
-              <span className="font-bold">{baseIwl.toFixed(1)} mL/hari</span>
-            </p>
-          )}
-
-          {result.hasFever && result.iwlFever !== null ? (
-            <p>
-              IWL demam/koreksi = IWL normal + 200 × (Suhu - 37) = {baseIwl.toFixed(1)} + 200 × (
-              {temperatureNum.toFixed(1)} - 37) ={" "}
-              <span className="font-bold">{result.iwlFever.toFixed(1)} mL/hari</span>
-            </p>
-          ) : (
-            <p>
-              Tidak ada koreksi demam karena suhu ≤ 37°C, sehingga IWL demam dan balance terkoreksi tidak ditampilkan.
+              Status Balance Terkoreksi:{" "}
+              <span className={`font-bold ${getStatusClass(result.statusCorrected)}`}>
+                {result.statusCorrected}
+              </span>
             </p>
           )}
         </div>
