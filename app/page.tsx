@@ -66,7 +66,7 @@ type CalculationResult = {
   feverAddition: number;
 };
 
-const STORAGE_KEY = "fluidacare-web-v8-data";
+const STORAGE_KEY = "kalbaca-web-v8-data";
 const MAX_ADDITIONAL_ITEMS = 5;
 
 const initialOfficerForm: OfficerForm = {
@@ -669,7 +669,7 @@ export default function Home() {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text("RSUP Dr. M. Djamil Padang • FluidaCare", 38, 28);
+      doc.text("RSUP Dr. M. Djamil Padang • KalBaCa Web", 38, 28);
 
       doc.setFillColor(255, 255, 255);
       doc.setGState(new (doc as any).GState({ opacity: 0.92 }));
@@ -946,7 +946,7 @@ export default function Home() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       setText(slate);
-      doc.text("Dokumen dibuat otomatis oleh FluidaCare.", 10, 288);
+      doc.text("Dokumen dibuat otomatis oleh KalBaCa Web.", 10, 288);
 
       doc.save(`Balance_Cairan_${safePatientName}_${exportDateForFile}.pdf`);
     } catch (error) {
@@ -977,7 +977,7 @@ export default function Home() {
           <div className="pointer-events-none absolute bottom-[-80px] right-[80px] h-48 w-48 rounded-full bg-white/10" />
 
           <div className="relative z-10 min-h-[170px] pr-0 md:pr-48">
-            <h1 className="text-4xl font-black tracking-tight md:text-5xl">FluidaCare</h1>
+            <h1 className="text-4xl font-black tracking-tight md:text-5xl">KalBaCa Web</h1>
             <p className="mt-4 max-w-4xl text-sm leading-7 text-white/95 md:text-lg">
               Kalkulator balance cairan berbasis website untuk membantu pencatatan intake-output yang
               lebih terstandar, menghitung balance cairan lebih cepat, serta membantu koreksi demam.
@@ -1313,13 +1313,13 @@ function InfoPage({
           </button>
 
           <div className="pt-12 md:pt-4">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/80">FluidaCare</p>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/80">KalBaCa Web</p>
             <h1 className="mt-3 max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
               {isAbout ? "Tentang Aplikasi" : "Profil Pengembangan"}
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-white/95 md:text-lg">
               {isAbout
-                ? "Informasi tujuan, fungsi, dan batasan penggunaan aplikasi FluidaCare."
+                ? "Informasi tujuan, fungsi, dan batasan penggunaan aplikasi KalBaCa Web."
                 : "Informasi pengembang, instansi, dan identitas pengembangan aplikasi."}
             </p>
           </div>
@@ -1329,9 +1329,9 @@ function InfoPage({
           {isAbout ? (
             <div className="space-y-5">
               <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 leading-8 text-slate-700 md:p-6">
-                <h2 className="text-2xl font-black text-slate-900">FluidaCare</h2>
+                <h2 className="text-2xl font-black text-slate-900">KalBaCa Web</h2>
                 <p className="mt-4">
-                  FluidaCare merupakan aplikasi kalkulator balance cairan yang dikembangkan secara mandiri
+                  KalBaCa Web merupakan aplikasi kalkulator balance cairan yang dikembangkan secara mandiri
                   untuk membantu tenaga kesehatan melakukan pencatatan intake-output dan perhitungan
                   keseimbangan cairan pasien secara cepat, praktis, dan terstandar, khususnya di Instalasi
                   Gawat Darurat (IGD).
@@ -1361,7 +1361,7 @@ function InfoPage({
                   <ProfileInfo label="Pengembang" value="Ramona Hotnida Sari Nasution" />
                   <ProfileInfo label="Instansi" value="RSUP Dr. M. Djamil Padang" />
                   <ProfileInfo label="Tahun Pengembangan" value="2026" />
-                  <ProfileInfo label="Nama Aplikasi" value="FluidaCare" />
+                  <ProfileInfo label="Nama Aplikasi" value="KalBaCa Web" />
                 </div>
               </div>
 
