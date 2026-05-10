@@ -117,6 +117,37 @@ function toNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function sanitizeNumericInput(value: string) {
+  const normalized = value.replace(/,/g, ".");
+  const numbersAndDotsOnly = normalized.replace(/[^0-9.]/g, "");
+  const parts = numbersAndDotsOnly.split(".");
+
+  if (parts.length === 1) return parts[0];
+
+  const integerPart = parts[0] || "0";
+  const decimalPart = parts.slice(1).join("");
+  return `${integerPart}.${decimalPart}`;
+}
+
+const patientNumericFields: Array<keyof PatientForm> = [
+  "age",
+  "weight",
+  "temperature",
+  "monitoringDuration",
+];
+
+const fluidNumericFields: Array<keyof FluidForm> = [
+  "oral",
+  "infus",
+  "obat",
+  "transfusi",
+  "airMetabolisme",
+  "urin",
+  "muntah",
+  "drainase",
+  "feses",
+];
+
 function sumAdditionalItems(items: AdditionalFluidItem[]) {
   return items.reduce((total, item) => total + toNumber(item.value), 0);
 }
@@ -267,7 +298,7 @@ function normalizeAdditionalItems(items: unknown): AdditionalFluidItem[] {
     return {
       id: safeItem.id || `restored-${index}-${Math.random().toString(36).slice(2, 9)}`,
       type: safeItem.type ?? "",
-      value: safeItem.value === "0" ? "" : safeItem.value ?? "",
+      value: safeItem.value === "0" ? "" : sanitizeNumericInput(safeItem.value ?? ""),
     };
   });
 }
@@ -301,7 +332,7 @@ export default function Home() {
 
         if (parsed.officer) setOfficer(parsed.officer);
         if (parsed.patient) {
-          const restoredAge = parsed.patient.age ?? "";
+          const restoredAge = sanitizeNumericInput(parsed.patient.age ?? "");
           const restoredAgeNumber = toNumber(restoredAge);
           const restoredAgeCategory: AgeCategory =
             restoredAgeNumber > 0 ? (restoredAgeNumber > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : "";
@@ -310,21 +341,21 @@ export default function Home() {
             name: parsed.patient.name ?? "",
             age: restoredAge,
             ageCategory: restoredAgeCategory,
-            weight: parsed.patient.weight ?? "",
-            temperature: parsed.patient.temperature ?? "",
+            weight: sanitizeNumericInput(parsed.patient.weight ?? ""),
+            temperature: sanitizeNumericInput(parsed.patient.temperature ?? ""),
             monitoringDuration:
-              parsed.patient.monitoringDuration === "0" ? "" : parsed.patient.monitoringDuration ?? "",
+              parsed.patient.monitoringDuration === "0" ? "" : sanitizeNumericInput(parsed.patient.monitoringDuration ?? ""),
           });
         }
 
         if (parsed.fluid) {
           setFluid({
-            oral: parsed.fluid.oral === "0" ? "" : parsed.fluid.oral ?? "",
-            infus: parsed.fluid.infus === "0" ? "" : parsed.fluid.infus ?? "",
-            obat: parsed.fluid.obat === "0" ? "" : parsed.fluid.obat ?? "",
-            transfusi: parsed.fluid.transfusi === "0" ? "" : parsed.fluid.transfusi ?? "",
+            oral: parsed.fluid.oral === "0" ? "" : sanitizeNumericInput(parsed.fluid.oral ?? ""),
+            infus: parsed.fluid.infus === "0" ? "" : sanitizeNumericInput(parsed.fluid.infus ?? ""),
+            obat: parsed.fluid.obat === "0" ? "" : sanitizeNumericInput(parsed.fluid.obat ?? ""),
+            transfusi: parsed.fluid.transfusi === "0" ? "" : sanitizeNumericInput(parsed.fluid.transfusi ?? ""),
             airMetabolisme:
-              parsed.fluid.airMetabolisme === "0" ? "" : parsed.fluid.airMetabolisme ?? "",
+              parsed.fluid.airMetabolisme === "0" ? "" : sanitizeNumericInput(parsed.fluid.airMetabolisme ?? ""),
             additionalIntakes: normalizeAdditionalItems(
               parsed.fluid.additionalIntakes ??
                 (parsed.fluid.lainIntakeType || parsed.fluid.lainIntakeValue
@@ -335,15 +366,15 @@ export default function Home() {
                         value:
                           parsed.fluid.lainIntakeValue === "0"
                             ? ""
-                            : parsed.fluid.lainIntakeValue ?? "",
+                            : sanitizeNumericInput(parsed.fluid.lainIntakeValue ?? ""),
                       },
                     ]
                   : null)
             ),
-            urin: parsed.fluid.urin === "0" ? "" : parsed.fluid.urin ?? "",
-            muntah: parsed.fluid.muntah === "0" ? "" : parsed.fluid.muntah ?? "",
-            drainase: parsed.fluid.drainase === "0" ? "" : parsed.fluid.drainase ?? "",
-            feses: parsed.fluid.feses === "0" ? "" : parsed.fluid.feses ?? "",
+            urin: parsed.fluid.urin === "0" ? "" : sanitizeNumericInput(parsed.fluid.urin ?? ""),
+            muntah: parsed.fluid.muntah === "0" ? "" : sanitizeNumericInput(parsed.fluid.muntah ?? ""),
+            drainase: parsed.fluid.drainase === "0" ? "" : sanitizeNumericInput(parsed.fluid.drainase ?? ""),
+            feses: parsed.fluid.feses === "0" ? "" : sanitizeNumericInput(parsed.fluid.feses ?? ""),
             additionalOutputs: normalizeAdditionalItems(
               parsed.fluid.additionalOutputs ??
                 (parsed.fluid.lainOutputType || parsed.fluid.lainOutputValue
@@ -354,7 +385,7 @@ export default function Home() {
                         value:
                           parsed.fluid.lainOutputValue === "0"
                             ? ""
-                            : parsed.fluid.lainOutputValue ?? "",
+                            : sanitizeNumericInput(parsed.fluid.lainOutputValue ?? ""),
                       },
                     ]
                   : null)
@@ -402,8 +433,12 @@ export default function Home() {
 
   function setPatientField<K extends keyof PatientForm>(key: K, value: PatientForm[K]) {
     setPatient((prev) => {
+      const safeValue = patientNumericFields.includes(key)
+        ? sanitizeNumericInput(String(value))
+        : String(value);
+
       if (key === "age") {
-        const ageValue = String(value);
+        const ageValue = safeValue;
         const ageNumber = toNumber(ageValue);
         const automaticCategory: AgeCategory =
           ageNumber > 0 ? (ageNumber > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : "";
@@ -415,14 +450,19 @@ export default function Home() {
         };
       }
 
-      return { ...prev, [key]: value };
+      return { ...prev, [key]: safeValue };
     });
     setResult(null);
   }
 
   function setFluidField<K extends keyof FluidForm>(key: K, value: FluidForm[K]) {
     if (!formReady) return;
-    setFluid((prev) => ({ ...prev, [key]: value }));
+
+    const safeValue = fluidNumericFields.includes(key)
+      ? sanitizeNumericInput(String(value))
+      : value;
+
+    setFluid((prev) => ({ ...prev, [key]: safeValue }));
     setResult(null);
   }
 
@@ -434,9 +474,13 @@ export default function Home() {
   ) {
     if (!formReady) return;
 
+    const safeValue = field === "value" ? sanitizeNumericInput(value) : value;
+
     setFluid((prev) => ({
       ...prev,
-      [group]: prev[group].map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+      [group]: prev[group].map((item) =>
+        item.id === id ? { ...item, [field]: safeValue } : item
+      ),
     }));
     setResult(null);
   }
@@ -727,9 +771,9 @@ export default function Home() {
       doc.text(exportDateDisplay, 172, 25, { align: "center" });
 
       setFill(lightBlue);
-      doc.roundedRect(10, 46, 190, 31, 5, 5, "F");
+      doc.roundedRect(10, 46, 190, 42, 5, 5, "F");
       setDraw(border);
-      doc.roundedRect(10, 46, 190, 31, 5, 5, "S");
+      doc.roundedRect(10, 46, 190, 42, 5, 5, "S");
 
       setText(primary);
       doc.setFont("helvetica", "bold");
@@ -739,45 +783,59 @@ export default function Home() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
 
-      doc.text("Nama Pasien", 14, 63);
-      doc.text(`: ${patient.name || "-"}`, 43, 63);
+      const identityLeftX = 14;
+      const identityLeftColonX = 50;
+      const identityLeftValueX = 54;
+      const identityRightX = 104;
+      const identityRightColonX = 151;
+      const identityRightValueX = 155;
+      const identityRowsY = [64, 72, 80];
 
-      doc.text("Usia", 14, 70);
-      doc.text(`: ${patient.age || "-"} tahun`, 43, 70);
+      doc.text("Nama Pasien", identityLeftX, identityRowsY[0]);
+      doc.text(":", identityLeftColonX, identityRowsY[0]);
+      doc.text(patient.name || "-", identityLeftValueX, identityRowsY[0]);
 
-      doc.text("Kategori Usia", 92, 63);
-      doc.text(`: ${displayAgeCategory || "-"}`, 121, 63);
+      doc.text("Usia", identityLeftX, identityRowsY[1]);
+      doc.text(":", identityLeftColonX, identityRowsY[1]);
+      doc.text(`${patient.age || "-"} tahun`, identityLeftValueX, identityRowsY[1]);
 
-      doc.text("Berat Badan", 92, 70);
-      doc.text(`: ${patient.weight || "-"} kg`, 121, 70);
+      doc.text("Suhu Tubuh", identityLeftX, identityRowsY[2]);
+      doc.text(":", identityLeftColonX, identityRowsY[2]);
+      doc.text(`${patient.temperature || "-"} °C`, identityLeftValueX, identityRowsY[2]);
 
-      doc.text("Suhu Tubuh", 150, 70);
-      doc.text(`: ${patient.temperature || "-"} °C`, 175, 70);
+      doc.text("Kategori Usia", identityRightX, identityRowsY[0]);
+      doc.text(":", identityRightColonX, identityRowsY[0]);
+      doc.text(displayAgeCategory || "-", identityRightValueX, identityRowsY[0]);
 
-      doc.text("Durasi", 14, 76);
-      doc.text(`: ${patient.monitoringDuration || "24"} jam`, 43, 76);
+      doc.text("Berat Badan", identityRightX, identityRowsY[1]);
+      doc.text(":", identityRightColonX, identityRowsY[1]);
+      doc.text(`${patient.weight || "-"} kg`, identityRightValueX, identityRowsY[1]);
+
+      doc.text("Durasi Pemantauan", identityRightX, identityRowsY[2]);
+      doc.text(":", identityRightColonX, identityRowsY[2]);
+      doc.text(`${patient.monitoringDuration || "24"} jam`, identityRightValueX, identityRowsY[2]);
 
       setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text(result.resultLabel.toUpperCase(), 10, 88);
+      doc.text(result.resultLabel.toUpperCase(), 10, 98);
 
       const summaryCards = [
-        { x: 10, y: 92, w: 58, h: 24, label: "Total Intake", value: formatMl(result.totalIntake) },
-        { x: 72, y: 92, w: 58, h: 24, label: "Total Output", value: formatMl(result.totalOutput) },
-        { x: 134, y: 92, w: 58, h: 24, label: `IWL Normal (${result.iwlUnitLabel})`, value: formatMl(result.iwlNormal) },
+        { x: 10, y: 102, w: 58, h: 24, label: "Total Intake", value: formatMl(result.totalIntake) },
+        { x: 72, y: 102, w: 58, h: 24, label: "Total Output", value: formatMl(result.totalOutput) },
+        { x: 134, y: 102, w: 58, h: 24, label: `IWL Normal (${result.iwlUnitLabel})`, value: formatMl(result.iwlNormal) },
         {
           x: 10,
-          y: 120,
+          y: 130,
           w: 58,
           h: 24,
           label: result.hasFever ? `IWL Demam (${result.iwlUnitLabel})` : "Status Demam",
           value: result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam",
         },
-        { x: 72, y: 120, w: 58, h: 24, label: "Balance Standar", value: formatMl(result.balanceStandard) },
+        { x: 72, y: 130, w: 58, h: 24, label: "Balance Standar", value: formatMl(result.balanceStandard) },
         {
           x: 134,
-          y: 120,
+          y: 130,
           w: 58,
           h: 24,
           label: result.hasFever ? "Balance Terkoreksi" : "Koreksi Demam",
@@ -803,25 +861,25 @@ export default function Home() {
       });
 
       setFill(statusColor);
-      doc.roundedRect(10, 150, 190, 20, 5, 5, "F");
+      doc.roundedRect(10, 160, 190, 20, 5, 5, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.text(
         `${result.hasFever ? "STATUS BALANCE TERKOREKSI" : "STATUS BALANCE"}: ${mainStatus.toUpperCase()}`,
         105,
-        158,
+        168,
         { align: "center" }
       );
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(getInterpretationText(mainStatus), 105, 164, { align: "center" });
+      doc.text(getInterpretationText(mainStatus), 105, 174, { align: "center" });
 
       setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text("RINCIAN KOMPONEN CAIRAN", 10, 180);
+      doc.text("RINCIAN KOMPONEN CAIRAN", 10, 190);
 
       const intakeRows = fluid.additionalIntakes
         .filter((item) => item.type.trim() || item.value.trim())
@@ -840,7 +898,7 @@ export default function Home() {
         ]);
 
       autoTable(doc, {
-        startY: 184,
+        startY: 194,
         head: [["Kelompok", "Komponen", "Nilai"]],
         body: [
           ["Intake", "Oral", `${toNumber(fluid.oral).toFixed(1)} mL`],
@@ -1136,25 +1194,22 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <div className="xl:col-span-2">
-                <FormField label="Nama Pasien" error={patientErrors.name}>
-                  <input
-                    type="text"
-                    placeholder="Masukkan nama pasien"
-                    value={patient.name}
-                    onChange={(e) => setPatientField("name", e.target.value)}
-                    className={inputClass(!!patientErrors.name)}
-                    maxLength={100}
-                  />
-                </FormField>
-              </div>
+              <FormField label="Nama Pasien" error={patientErrors.name}>
+                <input
+                  type="text"
+                  placeholder="Masukkan nama pasien"
+                  value={patient.name}
+                  onChange={(e) => setPatientField("name", e.target.value)}
+                  className={inputClass(!!patientErrors.name)}
+                  maxLength={100}
+                />
+              </FormField>
 
               <FormField label="Usia (tahun)" error={patientErrors.age}>
                 <input
-                  type="number"
-                  min={0}
-                  max={130}
-                  step={0.1}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.]*"
                   placeholder="Contoh: 45"
                   value={patient.age}
                   onChange={(e) => setPatientField("age", e.target.value)}
@@ -1182,10 +1237,9 @@ export default function Home() {
 
               <FormField label="Berat Badan (kg)" error={patientErrors.weight}>
                 <input
-                  type="number"
-                  min={0}
-                  max={300}
-                  step={0.1}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.]*"
                   placeholder="Contoh: 60"
                   value={patient.weight}
                   onChange={(e) => setPatientField("weight", e.target.value)}
@@ -1195,10 +1249,9 @@ export default function Home() {
 
               <FormField label="Suhu Tubuh (°C)" error={patientErrors.temperature}>
                 <input
-                  type="number"
-                  min={30}
-                  max={45}
-                  step={0.1}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.]*"
                   placeholder="Contoh: 37.8"
                   value={patient.temperature}
                   onChange={(e) => setPatientField("temperature", e.target.value)}
@@ -1206,13 +1259,12 @@ export default function Home() {
                 />
               </FormField>
 
-              <FormField label="Durasi Pemantauan Cairan (jam) - Opsional" error={patientErrors.monitoringDuration}>
+              <FormField label="Durasi Pemantauan (jam)" error={patientErrors.monitoringDuration}>
                 <input
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.1}
-                  placeholder="Kosongkan jika pemantauan 24 jam"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.]*"
+                  placeholder="Opsional, contoh: 6 / 8 / 12"
                   value={patient.monitoringDuration}
                   onChange={(e) => setPatientField("monitoringDuration", e.target.value)}
                   className={inputClass(!!patientErrors.monitoringDuration)}
@@ -1495,12 +1547,12 @@ function FieldNumber({
       <span className="mb-2 block text-sm font-bold text-slate-700">{label}</span>
       <div className="relative">
         <input
-          type="number"
-          min={0}
-          step={0.1}
+          type="text"
+          inputMode="decimal"
+          pattern="[0-9.]*"
           placeholder="0"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(sanitizeNumericInput(e.target.value))}
           className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-14 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
         />
         <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
@@ -1582,12 +1634,12 @@ function AdditionalItems({
             />
             <div className="relative">
               <input
-                type="number"
-                min={0}
-                step={0.1}
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
                 placeholder="0"
                 value={item.value}
-                onChange={(e) => onChange(group, item.id, "value", e.target.value)}
+                onChange={(e) => onChange(group, item.id, "value", sanitizeNumericInput(e.target.value))}
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               />
               <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
