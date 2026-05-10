@@ -17,6 +17,7 @@ type PatientForm = {
   ageCategory: AgeCategory;
   weight: string;
   temperature: string;
+  monitoringDuration: string;
 };
 
 type AdditionalFluidItem = {
@@ -50,6 +51,7 @@ type PatientErrors = {
   ageCategory?: string;
   weight?: string;
   temperature?: string;
+  monitoringDuration?: string;
 };
 
 type CalculationResult = {
@@ -64,9 +66,14 @@ type CalculationResult = {
   methodLabel: string;
   hasFever: boolean;
   feverAddition: number;
+  monitoringDurationHours: number | null;
+  isDurationBased: boolean;
+  resultLabel: string;
+  durationNote: string | null;
+  iwlUnitLabel: string;
 };
 
-const STORAGE_KEY = "kalbaca-web-v8-data";
+const STORAGE_KEY = "kalbaca-web-v9-data";
 const MAX_ADDITIONAL_ITEMS = 5;
 
 const initialOfficerForm: OfficerForm = {
@@ -79,6 +86,7 @@ const initialPatientForm: PatientForm = {
   ageCategory: "",
   weight: "",
   temperature: "",
+  monitoringDuration: "",
 };
 
 function createAdditionalItem(): AdditionalFluidItem {
@@ -152,6 +160,7 @@ function validatePatient(patient: PatientForm): PatientErrors {
   const age = toNumber(patient.age);
   const weight = toNumber(patient.weight);
   const temperature = toNumber(patient.temperature);
+  const monitoringDuration = toNumber(patient.monitoringDuration);
 
   if (!patient.name.trim()) {
     errors.name = "Nama pasien wajib diisi.";
@@ -188,6 +197,14 @@ function validatePatient(patient: PatientForm): PatientErrors {
     errors.temperature = "Suhu tubuh wajib diisi.";
   } else if (temperature < 30 || temperature > 45) {
     errors.temperature = "Suhu tubuh harus di antara 30°C sampai 45°C.";
+  }
+
+  if (patient.monitoringDuration.trim()) {
+    if (monitoringDuration <= 0) {
+      errors.monitoringDuration = "Durasi pemantauan harus lebih dari 0 jam.";
+    } else if (monitoringDuration > 24) {
+      errors.monitoringDuration = "Durasi pemantauan maksimal 24 jam.";
+    }
   }
 
   return errors;
@@ -295,6 +312,8 @@ export default function Home() {
             ageCategory: restoredAgeCategory,
             weight: parsed.patient.weight ?? "",
             temperature: parsed.patient.temperature ?? "",
+            monitoringDuration:
+              parsed.patient.monitoringDuration === "0" ? "" : parsed.patient.monitoringDuration ?? "",
           });
         }
 
@@ -483,15 +502,28 @@ export default function Home() {
       sumAdditionalItems(fluid.additionalOutputs);
 
     const ageNum = toNumber(patient.age);
+    const monitoringDurationHours = patient.monitoringDuration.trim()
+      ? toNumber(patient.monitoringDuration)
+      : null;
+    const isDurationBased = monitoringDurationHours !== null;
+    const durationMultiplier = monitoringDurationHours !== null ? monitoringDurationHours / 24 : 1;
     const hasFever = temperatureNum > 37;
 
     const automaticAgeCategory: AgeCategory = ageNum > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)";
 
-    const iwlNormal =
+    const iwlDaily =
       automaticAgeCategory === "dewasa (>18 Thn)" ? 15 * weightNum : (30 - ageNum) * weightNum;
+    const iwlNormal = iwlDaily * durationMultiplier;
 
-    const feverAddition = hasFever ? 200 * (temperatureNum - 37) : 0;
+    const feverAddition = hasFever ? 200 * (temperatureNum - 37) * durationMultiplier : 0;
     const iwlFever = hasFever ? iwlNormal + feverAddition : null;
+    const iwlUnitLabel = monitoringDurationHours !== null ? `mL/${monitoringDurationHours} jam` : "mL/hari";
+    const resultLabel = monitoringDurationHours !== null
+      ? `Estimasi Balance Cairan Berdasarkan Pemantauan ${monitoringDurationHours} Jam`
+      : "Hasil Balance Cairan 24 Jam";
+    const durationNote = monitoringDurationHours !== null
+      ? `Perhitungan ini menggunakan estimasi IWL sesuai durasi pemantauan selama ${monitoringDurationHours} jam, sehingga hasil balance cairan yang ditampilkan bukan merupakan rekapitulasi balance cairan 24 jam penuh.`
+      : null;
 
     const balanceStandard = totalIntake - (totalOutput + iwlNormal);
     const balanceCorrected =
@@ -508,10 +540,19 @@ export default function Home() {
       statusCorrected: balanceCorrected !== null ? getBalanceStatus(balanceCorrected) : null,
       methodLabel:
         automaticAgeCategory === "dewasa (>18 Thn)"
-          ? "Metode dewasa: IWL 15 × BB"
-          : "Metode anak: IWL (30 - usia) × BB",
+          ? isDurationBased
+            ? "Metode dewasa: IWL 15 × BB × durasi pemantauan / 24"
+            : "Metode dewasa: IWL 15 × BB"
+          : isDurationBased
+            ? "Metode anak: IWL (30 - usia) × BB × durasi pemantauan / 24"
+            : "Metode anak: IWL (30 - usia) × BB",
       hasFever,
       feverAddition,
+      monitoringDurationHours,
+      isDurationBased,
+      resultLabel,
+      durationNote,
+      iwlUnitLabel,
     });
   }
 
@@ -713,21 +754,24 @@ export default function Home() {
       doc.text("Suhu Tubuh", 150, 70);
       doc.text(`: ${patient.temperature || "-"} °C`, 175, 70);
 
+      doc.text("Durasi", 14, 76);
+      doc.text(`: ${patient.monitoringDuration || "24"} jam`, 43, 76);
+
       setText(primary);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.text("RINGKASAN HASIL", 10, 88);
+      doc.text(result.resultLabel.toUpperCase(), 10, 88);
 
       const summaryCards = [
         { x: 10, y: 92, w: 58, h: 24, label: "Total Intake", value: formatMl(result.totalIntake) },
         { x: 72, y: 92, w: 58, h: 24, label: "Total Output", value: formatMl(result.totalOutput) },
-        { x: 134, y: 92, w: 58, h: 24, label: "IWL Normal", value: formatMl(result.iwlNormal) },
+        { x: 134, y: 92, w: 58, h: 24, label: `IWL Normal (${result.iwlUnitLabel})`, value: formatMl(result.iwlNormal) },
         {
           x: 10,
           y: 120,
           w: 58,
           h: 24,
-          label: result.hasFever ? "IWL Demam" : "Status Demam",
+          label: result.hasFever ? `IWL Demam (${result.iwlUnitLabel})` : "Status Demam",
           value: result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam",
         },
         { x: 72, y: 120, w: 58, h: 24, label: "Balance Standar", value: formatMl(result.balanceStandard) },
@@ -852,12 +896,20 @@ export default function Home() {
 
       if (displayAgeCategory === "dewasa (>18 Thn)") {
         formulaLines.push(
-          `IWL normal dewasa = 15 x BB = 15 x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
+          result.isDurationBased && result.monitoringDurationHours !== null
+            ? `IWL normal dewasa = 15 x BB x durasi/24 = 15 x ${weightNum.toFixed(1)} x ${result.monitoringDurationHours.toFixed(1)}/24 = ${baseIwl.toFixed(1)} ${result.iwlUnitLabel}`
+            : `IWL normal dewasa = 15 x BB = 15 x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} ${result.iwlUnitLabel}`
         );
       } else {
         formulaLines.push(
-          `IWL normal anak = (30 - usia) x BB = (30 - ${ageNum.toFixed(1)}) x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} mL/hari`
+          result.isDurationBased && result.monitoringDurationHours !== null
+            ? `IWL normal anak = (30 - usia) x BB x durasi/24 = (30 - ${ageNum.toFixed(1)}) x ${weightNum.toFixed(1)} x ${result.monitoringDurationHours.toFixed(1)}/24 = ${baseIwl.toFixed(1)} ${result.iwlUnitLabel}`
+            : `IWL normal anak = (30 - usia) x BB = (30 - ${ageNum.toFixed(1)}) x ${weightNum.toFixed(1)} = ${baseIwl.toFixed(1)} ${result.iwlUnitLabel}`
         );
+      }
+
+      if (result.durationNote) {
+        formulaLines.push(result.durationNote);
       }
 
       formulaLines.push(
@@ -866,7 +918,9 @@ export default function Home() {
 
       if (result.hasFever && result.iwlFever !== null && result.balanceCorrected !== null) {
         formulaLines.push(
-          `IWL demam/koreksi = IWL normal + 200 x (Suhu - 37) = ${result.iwlNormal.toFixed(1)} + 200 x (${temperatureNum.toFixed(1)} - 37) = ${result.iwlFever.toFixed(1)} mL/hari`
+          result.isDurationBased && result.monitoringDurationHours !== null
+            ? `IWL demam/koreksi = IWL normal + [200 x (Suhu - 37) x durasi/24] = ${result.iwlNormal.toFixed(1)} + [200 x (${temperatureNum.toFixed(1)} - 37) x ${result.monitoringDurationHours.toFixed(1)}/24] = ${result.iwlFever.toFixed(1)} ${result.iwlUnitLabel}`
+            : `IWL demam/koreksi = IWL normal + 200 x (Suhu - 37) = ${result.iwlNormal.toFixed(1)} + 200 x (${temperatureNum.toFixed(1)} - 37) = ${result.iwlFever.toFixed(1)} ${result.iwlUnitLabel}`
         );
         formulaLines.push(
           `Balance cairan terkoreksi = Intake - (Output + IWL demam) = ${result.totalIntake.toFixed(1)} - (${result.totalOutput.toFixed(1)} + ${result.iwlFever.toFixed(1)}) = ${result.balanceCorrected.toFixed(1)} mL`
@@ -1151,11 +1205,24 @@ export default function Home() {
                   className={inputClass(!!patientErrors.temperature)}
                 />
               </FormField>
+
+              <FormField label="Durasi Pemantauan Cairan (jam) - Opsional" error={patientErrors.monitoringDuration}>
+                <input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.1}
+                  placeholder="Kosongkan jika pemantauan 24 jam"
+                  value={patient.monitoringDuration}
+                  onChange={(e) => setPatientField("monitoringDuration", e.target.value)}
+                  className={inputClass(!!patientErrors.monitoringDuration)}
+                />
+              </FormField>
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm leading-6 text-blue-800">
-                Kategori otomatis: usia ≤18 tahun masuk Anak, usia &gt;18 tahun masuk Dewasa.
+                Kategori otomatis: usia ≤18 tahun masuk Anak, usia &gt;18 tahun masuk Dewasa. Durasi pemantauan boleh dikosongkan jika menghitung rekap 24 jam.
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
                 {saveMessage}
@@ -1546,12 +1613,22 @@ function ResultPanel({ result }: { result: CalculationResult }) {
 
   return (
     <div className="rounded-[28px] border border-blue-100 bg-blue-50 p-5">
+      <div className="mb-5 rounded-3xl border border-white bg-white p-5">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-500">Jenis Hasil</p>
+        <p className="mt-2 text-2xl font-black text-slate-900">{result.resultLabel}</p>
+        {result.durationNote && (
+          <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            {result.durationNote}
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <ResultCard label="Total Intake" value={formatMl(result.totalIntake)} />
         <ResultCard label="Total Output" value={formatMl(result.totalOutput)} />
-        <ResultCard label="IWL Normal" value={formatMl(result.iwlNormal)} />
+        <ResultCard label={`IWL Normal (${result.iwlUnitLabel})`} value={formatMl(result.iwlNormal)} />
         <ResultCard
-          label={result.hasFever ? "IWL Demam" : "Status Demam"}
+          label={result.hasFever ? `IWL Demam (${result.iwlUnitLabel})` : "Status Demam"}
           value={result.hasFever && result.iwlFever !== null ? formatMl(result.iwlFever) : "Tidak demam"}
         />
         <ResultCard label="Balance Standar" value={formatMl(result.balanceStandard)} status={result.statusStandard} />
@@ -1607,6 +1684,7 @@ function FormulaPanel({
   const temperatureNum = toNumber(patient.temperature);
   const automaticAgeCategory: AgeCategory =
     ageNum > 0 ? (ageNum > 18 ? "dewasa (>18 Thn)" : "anak (<18 Thn)") : patient.ageCategory;
+  const durationHours = result.monitoringDurationHours;
 
   return (
     <div className="mt-5 rounded-[28px] border border-slate-200 bg-white p-5">
@@ -1632,15 +1710,27 @@ function FormulaPanel({
         <div>
           <h4 className="font-bold text-slate-800">IWL Normal</h4>
           {automaticAgeCategory === "dewasa (>18 Thn)" ? (
+            result.isDurationBased && durationHours !== null ? (
+              <p>
+                IWL normal dewasa = 15 × BB × durasi/24 = 15 × {weightNum.toFixed(1)} × {durationHours.toFixed(1)}/24 ={" "}
+                <span className="font-bold">{result.iwlNormal.toFixed(1)} {result.iwlUnitLabel}</span>
+              </p>
+            ) : (
+              <p>
+                IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
+                <span className="font-bold">{result.iwlNormal.toFixed(1)} {result.iwlUnitLabel}</span>
+              </p>
+            )
+          ) : result.isDurationBased && durationHours !== null ? (
             <p>
-              IWL normal dewasa = 15 × BB = 15 × {weightNum.toFixed(1)} ={" "}
-              <span className="font-bold">{result.iwlNormal.toFixed(1)} mL/hari</span>
+              IWL normal anak = (30 - usia) × BB × durasi/24 = (30 - {ageNum.toFixed(1)}) × {weightNum.toFixed(1)} × {durationHours.toFixed(1)}/24 ={" "}
+              <span className="font-bold">{result.iwlNormal.toFixed(1)} {result.iwlUnitLabel}</span>
             </p>
           ) : (
             <p>
               IWL normal anak = (30 - usia) × BB = (30 - {ageNum.toFixed(1)}) ×{" "}
               {weightNum.toFixed(1)} ={" "}
-              <span className="font-bold">{result.iwlNormal.toFixed(1)} mL/hari</span>
+              <span className="font-bold">{result.iwlNormal.toFixed(1)} {result.iwlUnitLabel}</span>
             </p>
           )}
         </div>
@@ -1649,9 +1739,10 @@ function FormulaPanel({
           <div>
             <h4 className="font-bold text-slate-800">IWL Demam/Koreksi</h4>
             <p>
-              IWL normal + 200 × (Suhu - 37) = {result.iwlNormal.toFixed(1)} + 200 × (
-              {temperatureNum.toFixed(1)} - 37) ={" "}
-              <span className="font-bold">{result.iwlFever.toFixed(1)} mL/hari</span>
+              {result.isDurationBased && durationHours !== null
+                ? `IWL demam = IWL normal + [200 × (Suhu - 37) × durasi/24] = ${result.iwlNormal.toFixed(1)} + [200 × (${temperatureNum.toFixed(1)} - 37) × ${durationHours.toFixed(1)}/24] = `
+                : `IWL demam = IWL normal + 200 × (Suhu - 37) = ${result.iwlNormal.toFixed(1)} + 200 × (${temperatureNum.toFixed(1)} - 37) = `}
+              <span className="font-bold">{result.iwlFever.toFixed(1)} {result.iwlUnitLabel}</span>
             </p>
           </div>
         ) : (
@@ -1677,6 +1768,12 @@ function FormulaPanel({
               {result.totalOutput.toFixed(1)} + {result.iwlFever.toFixed(1)}) ={" "}
               <span className="font-bold">{result.balanceCorrected.toFixed(1)} mL</span>
             </p>
+          </div>
+        )}
+
+        {result.durationNote && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+            {result.durationNote}
           </div>
         )}
 
